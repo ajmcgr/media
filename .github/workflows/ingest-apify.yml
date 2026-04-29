@@ -1,0 +1,62 @@
+name: Ingest Apify To Supabase
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run in dry-run mode"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      max_records_per_run:
+        description: "Optional override for max records per run"
+        required: false
+        default: "1000"
+      batch_size:
+        description: "Optional override for batch size"
+        required: false
+        default: "250"
+  schedule:
+    - cron: "*/15 * * * *"
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: apify-supabase-ingest
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    env:
+      APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+      APIFY_DATASET_IDS: ${{ secrets.APIFY_DATASET_IDS }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+      MAX_RECORDS_PER_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.max_records_per_run || '1000' }}
+      BATCH_SIZE: ${{ github.event_name == 'workflow_dispatch' && inputs.batch_size || '250' }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build worker
+        run: npm run build
+
+      - name: Run ingestion worker
+        run: npm run ingest

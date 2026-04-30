@@ -181,9 +181,38 @@ function asString(value: unknown): string | undefined {
     return undefined;
 }
 
+function extractFirstString(value: unknown): string | undefined {
+    const direct = asString(value);
+    if (direct) {
+        return direct;
+    }
+
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            const nested = extractFirstString(item);
+            if (nested) {
+                return nested;
+            }
+        }
+        return undefined;
+    }
+
+    if (value && typeof value === "object") {
+        const record = value as Record<string, unknown>;
+        return (
+            asString(record.url) ??
+            asString(record.href) ??
+            asString(record.link) ??
+            asString(record.value)
+        );
+    }
+
+    return undefined;
+}
+
 function coalesceString(record: Record<string, unknown>, keys: string[]): string | undefined {
     for (const key of keys) {
-        const value = asString(record[key]);
+        const value = extractFirstString(record[key]);
         if (value) {
             return value;
         }
@@ -227,12 +256,17 @@ function isCreatorLike(record: Record<string, unknown>): boolean {
             "ig_handle",
             "instagram_handle",
             "instagram",
+            "username",
             "youtube_url",
             "youtube",
             "channel_url",
             "rec_id",
+            "id",
+            "fbid",
             "creator_category",
             "niche",
+            "businessCategoryName",
+            "searchTerm",
         ]),
     );
 }
@@ -282,17 +316,31 @@ function normalizeJournalist(
 function normalizeCreator(
     record: Record<string, unknown>,
 ): CreatorRecord | undefined {
-    const name = coalesceString(record, ["name", "full_name", "creator_name", "channel_name"]);
+    const name = coalesceString(record, [
+        "name",
+        "full_name",
+        "fullName",
+        "creator_name",
+        "channel_name",
+    ]);
     const email = normalizeEmail(coalesceString(record, ["email", "contact_email"]));
     const igHandle = normalizeHandle(
-        coalesceString(record, ["ig_handle", "instagram_handle", "instagram"]),
+        coalesceString(record, ["ig_handle", "instagram_handle", "instagram", "username"]),
     );
     const youtubeUrl = normalizeWebsite(
         coalesceString(record, ["youtube_url", "youtube", "channel_url"]),
     );
-    const recId = coalesceString(record, ["rec_id", "record_id", "creator_id"]);
-    const website = normalizeWebsite(coalesceString(record, ["website", "domain", "site"]));
-    const category = coalesceString(record, ["category", "creator_category", "niche"]);
+    const recId = coalesceString(record, ["rec_id", "record_id", "creator_id", "id", "fbid"]);
+    const website = normalizeWebsite(
+        coalesceString(record, ["website", "domain", "site", "externalUrls"]),
+    );
+    const category = coalesceString(record, [
+        "category",
+        "creator_category",
+        "niche",
+        "businessCategoryName",
+        "searchTerm",
+    ]);
 
     if (!name && !email && !igHandle && !youtubeUrl && !recId && !website) {
         return undefined;

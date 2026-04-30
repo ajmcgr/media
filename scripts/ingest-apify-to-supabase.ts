@@ -413,7 +413,7 @@ function dedupeLocally(records: NormalizedRecord[]): NormalizedRecord[] {
         deduped.push(record);
     }
 
-    return dedupeLocally(normalizedRecords);
+    return deduped;
 }
 
 async function fetchDatasetItems(

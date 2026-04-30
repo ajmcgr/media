@@ -60,6 +60,7 @@ type RunStats = {
     normalized: number;
     malformed: number;
     duplicatesSkipped: number;
+    skippedMissingIgHandle: number;
     journalistAttempted: number;
     creatorAttempted: number;
     rowsWritten: number;
@@ -84,6 +85,7 @@ const stats: RunStats = {
     normalized: 0,
     malformed: 0,
     duplicatesSkipped: 0,
+    skippedMissingIgHandle: 0,
     journalistAttempted: 0,
     creatorAttempted: 0,
     rowsWritten: 0,
@@ -559,6 +561,7 @@ function summarize(records: NormalizedRecord[]): void {
         normalized: stats.normalized,
         malformed: stats.malformed,
         duplicatesSkipped: stats.duplicatesSkipped,
+        skippedMissingIgHandle: stats.skippedMissingIgHandle,
         journalistRows,
         creatorRows,
         errors: stats.errors,
@@ -582,6 +585,16 @@ function emptyGroupedRecords(): GroupedRecords {
 function groupRecords(records: NormalizedRecord[]): GroupedRecords {
     const grouped = emptyGroupedRecords();
     for (const record of records) {
+        if (record.table === "creators") {
+            if (!record.ig_handle) {
+                stats.skippedMissingIgHandle += 1;
+                continue;
+            }
+
+            grouped.ig_handle.push(record);
+            continue;
+        }
+
         grouped[getConflictStrategy(record)].push(record);
     }
     return grouped;
@@ -657,6 +670,7 @@ async function run(): Promise<void> {
         rowsWritten: stats.rowsWritten,
         upsertedGroups: stats.upsertedGroups,
         fallbackChecked: stats.fallbackChecked,
+        skippedMissingIgHandle: stats.skippedMissingIgHandle,
         errors: stats.errors,
         runtimeSeconds: Number(((Date.now() - startedAt) / 1000).toFixed(2)),
     });

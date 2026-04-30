@@ -413,7 +413,7 @@ function dedupeLocally(records: NormalizedRecord[]): NormalizedRecord[] {
         deduped.push(record);
     }
 
-    return deduped;
+    return dedupeLocally(normalizedRecords);
 }
 
 async function fetchDatasetItems(
@@ -943,7 +943,7 @@ function isCriticalSupabaseError(message: string): boolean {
 }
 
 async function withRetry<T>(
-    operation: () => Promise<T>,
+    operation: () => PromiseLike<T>,
     label: string,
     attempts = NETWORK_RETRY_ATTEMPTS,
 ): Promise<T> {

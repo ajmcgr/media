@@ -73,7 +73,7 @@ type RunStats = {
 type ExistingRow = Record<string, unknown>;
 type TableColumnMap = Record<TableName, Set<string>>;
 
-const DEFAULT_MAX_RECORDS_PER_RUN = 1000;
+const DEFAULT_MAX_RECORDS_PER_RUN = 500;
 const DEFAULT_BATCH_SIZE = 250;
 const SAMPLE_RECORDS_LIMIT = 5;
 const APIFY_PAGE_LIMIT = 250;

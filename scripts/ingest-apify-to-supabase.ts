@@ -61,6 +61,7 @@ type RunStats = {
     malformed: number;
     duplicatesSkipped: number;
     skippedMissingIgHandle: number;
+    categorySetNull: number;
     journalistAttempted: number;
     creatorAttempted: number;
     rowsWritten: number;
@@ -86,6 +87,7 @@ const stats: RunStats = {
     malformed: 0,
     duplicatesSkipped: 0,
     skippedMissingIgHandle: 0,
+    categorySetNull: 0,
     journalistAttempted: 0,
     creatorAttempted: 0,
     rowsWritten: 0,
@@ -234,6 +236,160 @@ function normalizeHandle(value?: string): string | undefined {
         return undefined;
     }
     return value.replace(/^@+/, "").trim().toLowerCase() || undefined;
+}
+
+function normalizeCategorySlug(value?: string): string | undefined {
+    if (!value) {
+        return undefined;
+    }
+
+    const normalized = value
+        .trim()
+        .toLowerCase()
+        .replace(/&/g, " and ")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+
+    return normalized || undefined;
+}
+
+function pushCandidate(candidates: string[], value?: string): void {
+    if (!value) {
+        return;
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+        return;
+    }
+
+    candidates.push(trimmed);
+}
+
+function inferCreatorCategoryCandidates(rawCategory?: string): string[] {
+    if (!rawCategory) {
+        return [];
+    }
+
+    const candidates: string[] = [];
+    const parts = rawCategory
+        .split(/[|,/]+/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+    const normalizedParts = parts.map((part) => part.toLowerCase());
+
+    pushCandidate(candidates, rawCategory);
+    for (const part of parts) {
+        pushCandidate(candidates, part);
+    }
+
+    const whole = rawCategory.toLowerCase();
+    const partsText = normalizedParts.join(" ");
+
+    const includesAny = (...needles: string[]): boolean =>
+        needles.some((needle) => whole.includes(needle) || partsText.includes(needle));
+
+    if (includesAny("travel", "tour", "adventure")) {
+        pushCandidate(candidates, "travel");
+    }
+    if (includesAny("food", "foodie", "restaurant", "chef", "critic", "cooking")) {
+        pushCandidate(candidates, "food");
+    }
+    if (
+        includesAny(
+            "fitness",
+            "fit",
+            "trainer",
+            "athlete",
+            "gym",
+            "workout",
+            "weight loss",
+            "reel creator",
+        )
+    ) {
+        pushCandidate(candidates, "fitness");
+    }
+    if (includesAny("health", "wellness", "medical")) {
+        pushCandidate(candidates, "health");
+    }
+    if (includesAny("shopping", "product/service", "product service", "retail")) {
+        pushCandidate(candidates, "Shopping");
+    }
+    if (includesAny("beauty", "cosmetic", "makeup", "skincare", "skin care")) {
+        pushCandidate(candidates, "beauty-cosmetics");
+    }
+    if (includesAny("jewel", "jewell", "watch")) {
+        pushCandidate(candidates, "jewellry-watches");
+    }
+    if (includesAny("tv", "film", "movie", "cinema")) {
+        pushCandidate(candidates, "tv-film");
+    }
+    if (includesAny("photo", "photography")) {
+        pushCandidate(candidates, "photography");
+    }
+    if (includesAny("design")) {
+        pushCandidate(candidates, "design");
+    }
+    if (includesAny("sport")) {
+        pushCandidate(candidates, "sports");
+    }
+    if (includesAny("children", "kids")) {
+        pushCandidate(candidates, "Children");
+    }
+    if (includesAny("baby")) {
+        pushCandidate(candidates, "baby");
+    }
+    if (includesAny("business", "entrepreneur", "economy")) {
+        pushCandidate(candidates, "business");
+    }
+    if (includesAny("gaming", "game")) {
+        pushCandidate(candidates, "gaming");
+    }
+    if (includesAny("electronic", "tech", "gadget")) {
+        pushCandidate(candidates, "electronics");
+    }
+    if (includesAny("pet", "animal")) {
+        pushCandidate(candidates, "pets");
+    }
+
+    return candidates;
+}
+
+function buildCreatorCategoryLookup(validCategories: string[]): Map<string, string> {
+    const lookup = new Map<string, string>();
+
+    for (const category of validCategories) {
+        const direct = category.trim().toLowerCase();
+        const slug = normalizeCategorySlug(category);
+
+        lookup.set(direct, category);
+        if (slug) {
+            lookup.set(slug, category);
+        }
+    }
+
+    return lookup;
+}
+
+function mapCreatorCategory(
+    rawCategory: string | undefined,
+    lookup: Map<string, string>,
+): string | undefined {
+    if (!rawCategory) {
+        return undefined;
+    }
+
+    for (const candidate of inferCreatorCategoryCandidates(rawCategory)) {
+        const direct = candidate.trim().toLowerCase();
+        const slug = normalizeCategorySlug(candidate);
+        const mapped = lookup.get(direct) ?? (slug ? lookup.get(slug) : undefined);
+
+        if (mapped) {
+            return mapped;
+        }
+    }
+
+    return undefined;
 }
 
 function normalizeWebsite(value?: string): string | undefined {
@@ -562,6 +718,7 @@ function summarize(records: NormalizedRecord[]): void {
         malformed: stats.malformed,
         duplicatesSkipped: stats.duplicatesSkipped,
         skippedMissingIgHandle: stats.skippedMissingIgHandle,
+        categorySetNull: stats.categorySetNull,
         journalistRows,
         creatorRows,
         errors: stats.errors,
@@ -600,9 +757,67 @@ function groupRecords(records: NormalizedRecord[]): GroupedRecords {
     return grouped;
 }
 
+async function loadCreatorCategoryValues(
+    supabase: SupabaseClient,
+): Promise<string[]> {
+    const { data, error } = await withRetry(
+        () => supabase.from("creator_category").select("name"),
+        "supabase select creator_category",
+    );
+
+    if (error) {
+        throw new Error(`Could not load creator categories: ${error.message}`);
+    }
+
+    return (data ?? [])
+        .map((row) => asString((row as Record<string, unknown>).name))
+        .filter((value): value is string => Boolean(value));
+}
+
+function applyCreatorCategoryMapping(
+    records: NormalizedRecord[],
+    validCategories: string[],
+): NormalizedRecord[] {
+    const lookup = buildCreatorCategoryLookup(validCategories);
+
+    return records.map((record) => {
+        if (record.table !== "creators") {
+            return record;
+        }
+
+        const mappedCategory = mapCreatorCategory(record.category, lookup);
+
+        if (record.category) {
+            if (!mappedCategory) {
+                stats.categorySetNull += 1;
+            }
+
+            log("Creator category mapping", {
+                rawCategory: record.category,
+                mappedCategory: mappedCategory ?? null,
+            });
+        }
+
+        return {
+            ...record,
+            category: mappedCategory,
+        };
+    });
+}
+
 async function run(): Promise<void> {
     const startedAt = Date.now();
     const config = getRuntimeConfig();
+    const supabase = createClient(
+        config.supabaseUrl,
+        config.supabaseServiceRoleKey,
+        {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false,
+            },
+        },
+    );
 
     log("Starting ingestion worker", {
         datasetIds: config.datasetIds,
@@ -611,7 +826,16 @@ async function run(): Promise<void> {
         dryRun: config.dryRun,
     });
 
-    const records = await fetchAllRecords(config);
+    const validCreatorCategories = await loadCreatorCategoryValues(supabase);
+    log("Loaded valid creator categories", {
+        count: validCreatorCategories.length,
+        values: validCreatorCategories,
+    });
+
+    const records = applyCreatorCategoryMapping(
+        await fetchAllRecords(config),
+        validCreatorCategories,
+    );
     summarize(records);
 
     if (config.dryRun) {
@@ -623,17 +847,6 @@ async function run(): Promise<void> {
         });
         return;
     }
-
-    const supabase = createClient(
-        config.supabaseUrl,
-        config.supabaseServiceRoleKey,
-        {
-            auth: {
-                autoRefreshToken: false,
-                persistSession: false,
-            },
-        },
-    );
 
     const grouped = groupRecords(records);
     const columnMap = await loadTableColumnMap(supabase);
@@ -671,6 +884,7 @@ async function run(): Promise<void> {
         upsertedGroups: stats.upsertedGroups,
         fallbackChecked: stats.fallbackChecked,
         skippedMissingIgHandle: stats.skippedMissingIgHandle,
+        categorySetNull: stats.categorySetNull,
         errors: stats.errors,
         runtimeSeconds: Number(((Date.now() - startedAt) / 1000).toFixed(2)),
     });

@@ -12,6 +12,7 @@ The worker reads:
 
 - `APIFY_TOKEN`
 - `APIFY_DATASET_IDS`
+- `APIFY_TASK_IDS` optional comma-separated Apify saved task ids
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `MAX_RECORDS_PER_RUN` default `1000`
@@ -21,11 +22,14 @@ The worker reads:
 ## How to add dataset IDs
 
 Set `APIFY_DATASET_IDS` as a comma-separated list of dataset ids.
+Set `APIFY_TASK_IDS` as a comma-separated list of saved task ids when you want the worker
+to automatically ingest the latest successful dataset produced by those tasks.
 
 Example:
 
 ```bash
 APIFY_DATASET_IDS=abc123,def456,ghi789
+APIFY_TASK_IDS=R6TlqXbiPu3Rz5ySe
 ```
 
 ## How to run a dry run locally

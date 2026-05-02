@@ -42,6 +42,7 @@ type NormalizedRecord = JournalistRecord | CreatorRecord;
 type RuntimeConfig = {
     apifyToken: string;
     datasetIds: string[];
+    taskIds: string[];
     supabaseUrl: string;
     supabaseServiceRoleKey: string;
     maxRecordsPerRun: number;
@@ -145,14 +146,19 @@ function getRuntimeConfig(): RuntimeConfig {
         .split(",")
         .map((id) => id.trim())
         .filter(Boolean);
+    const taskIds = (process.env.APIFY_TASK_IDS ?? "")
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean);
 
-    if (datasetIds.length === 0) {
-        throw new Error("APIFY_DATASET_IDS did not contain any dataset ids");
+    if (datasetIds.length === 0 && taskIds.length === 0) {
+        throw new Error("Provide at least one APIFY_DATASET_IDS or APIFY_TASK_IDS value");
     }
 
     return {
         apifyToken: readRequiredEnv("APIFY_TOKEN"),
         datasetIds,
+        taskIds,
         supabaseUrl: readRequiredEnv("SUPABASE_URL"),
         supabaseServiceRoleKey: readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
         maxRecordsPerRun: parseIntegerEnv(
@@ -222,6 +228,20 @@ function coalesceString(record: Record<string, unknown>, keys: string[]): string
         }
     }
     return undefined;
+}
+
+function getNestedValue(
+    record: Record<string, unknown>,
+    path: string[],
+): unknown {
+    let current: unknown = record;
+    for (const key of path) {
+        if (!current || typeof current !== "object" || Array.isArray(current)) {
+            return undefined;
+        }
+        current = (current as Record<string, unknown>)[key];
+    }
+    return current;
 }
 
 function normalizeName(value?: string): string | undefined {
@@ -437,7 +457,66 @@ function buildSourceUrl(record: Record<string, unknown>): string | undefined {
         "website_url",
         "linkedin_url",
         "page_url",
+        "twitterUrl",
     ]);
+}
+
+function isTwitterJournalistLike(record: Record<string, unknown>): boolean {
+    const searchTerm = coalesceString(record, [
+        "searchTerm",
+        "search_term",
+        "query",
+    ]);
+    const nestedAuthorName = extractFirstString(getNestedValue(record, ["author", "name"]));
+    const nestedAuthorHandle = extractFirstString(
+        getNestedValue(record, ["author", "userName"]),
+    );
+    const tweetText = coalesceString(record, ["text", "fullText", "tweetText", "tweet"]);
+    const tweetUrl =
+        coalesceString(record, ["twitterUrl", "url", "tweetUrl"]) ??
+        extractFirstString(getNestedValue(record, ["author", "url"]));
+
+    return Boolean(
+        searchTerm?.toLowerCase().includes("journalist") &&
+            (nestedAuthorName || nestedAuthorHandle) &&
+            (tweetText || tweetUrl),
+    );
+}
+
+function normalizeTwitterJournalist(
+    record: Record<string, unknown>,
+): JournalistRecord | undefined {
+    const name =
+        extractFirstString(getNestedValue(record, ["author", "name"])) ??
+        coalesceString(record, ["authorName", "name"]);
+    const xhandle = normalizeHandle(
+        extractFirstString(getNestedValue(record, ["author", "userName"])) ??
+            coalesceString(record, ["userName", "username", "screen_name", "handle"]),
+    );
+    const website = normalizeWebsite(
+        extractFirstString(getNestedValue(record, ["author", "url"])) ??
+            (xhandle ? `https://x.com/${xhandle}` : undefined),
+    );
+    const location =
+        extractFirstString(getNestedValue(record, ["author", "location"])) ??
+        coalesceString(record, ["location"]);
+    const sourceUrl =
+        coalesceString(record, ["twitterUrl", "url", "tweetUrl"]) ??
+        buildSourceUrl(record);
+
+    if (!name && !xhandle && !website) {
+        return undefined;
+    }
+
+    return {
+        table: "journalist",
+        name,
+        xhandle,
+        website,
+        location,
+        source: "twitter",
+        source_url: sourceUrl,
+    };
 }
 
 function normalizeJournalist(
@@ -528,9 +607,11 @@ function normalizeRecord(
     }
 
     const record = item as Record<string, unknown>;
-    const normalized = isCreatorLike(record)
-        ? normalizeCreator(record)
-        : normalizeJournalist(record);
+    const normalized = isTwitterJournalistLike(record)
+        ? normalizeTwitterJournalist(record)
+        : isCreatorLike(record)
+          ? normalizeCreator(record)
+          : normalizeJournalist(record);
 
     if (!normalized) {
         stats.malformed += 1;
@@ -675,16 +756,92 @@ async function fetchDatasetItems(
     return items;
 }
 
+async function fetchLatestTaskDatasetId(
+    config: RuntimeConfig,
+    taskId: string,
+): Promise<string | undefined> {
+    const url = new URL(`https://api.apify.com/v2/actor-tasks/${taskId}/runs`);
+    url.searchParams.set("token", config.apifyToken);
+    url.searchParams.set("status", "SUCCEEDED");
+    url.searchParams.set("desc", "1");
+    url.searchParams.set("limit", "1");
+
+    const response = await withRetry(
+        () =>
+            fetch(url, {
+                method: "GET",
+                headers: {
+                    Accept: "application/json",
+                },
+                signal: AbortSignal.timeout(30_000),
+            }),
+        `fetch task runs ${taskId}`,
+    );
+
+    if (!response.ok) {
+        throw new Error(
+            `Apify task run fetch failed for ${taskId} with ${response.status} ${response.statusText}`,
+        );
+    }
+
+    const payload = (await response.json()) as {
+        data?: { items?: Array<Record<string, unknown>> };
+    };
+    const latestRun = payload.data?.items?.[0];
+    const datasetId = asString(latestRun?.defaultDatasetId);
+
+    log("Resolved latest task dataset", {
+        taskId,
+        datasetId: datasetId ?? null,
+        runId: asString(latestRun?.id) ?? null,
+    });
+
+    return datasetId;
+}
+
 async function fetchAllRecords(config: RuntimeConfig): Promise<NormalizedRecord[]> {
     const normalizedRecords: NormalizedRecord[] = [];
+    const seenDatasetIds = new Set<string>();
 
     for (const datasetId of config.datasetIds) {
         const remainingBudget = config.maxRecordsPerRun - stats.rawPulled;
         if (remainingBudget <= 0) {
             break;
         }
+        if (seenDatasetIds.has(datasetId)) {
+            continue;
+        }
+        seenDatasetIds.add(datasetId);
 
         log("Fetching dataset", { datasetId, remainingBudget });
+        const rawItems = await fetchDatasetItems(config, datasetId, remainingBudget);
+        stats.rawPulled += rawItems.length;
+
+        for (const item of rawItems) {
+            const normalized = normalizeRecord(item, datasetId);
+            if (normalized) {
+                normalizedRecords.push(normalized);
+            }
+        }
+    }
+
+    for (const taskId of config.taskIds) {
+        const remainingBudget = config.maxRecordsPerRun - stats.rawPulled;
+        if (remainingBudget <= 0) {
+            break;
+        }
+
+        const datasetId = await fetchLatestTaskDatasetId(config, taskId);
+        if (!datasetId || seenDatasetIds.has(datasetId)) {
+            continue;
+        }
+        seenDatasetIds.add(datasetId);
+
+        log("Fetching latest task dataset", {
+            taskId,
+            datasetId,
+            remainingBudget,
+        });
         const rawItems = await fetchDatasetItems(config, datasetId, remainingBudget);
         stats.rawPulled += rawItems.length;
 
@@ -821,6 +978,7 @@ async function run(): Promise<void> {
 
     log("Starting ingestion worker", {
         datasetIds: config.datasetIds,
+        taskIds: config.taskIds,
         maxRecordsPerRun: config.maxRecordsPerRun,
         batchSize: config.batchSize,
         dryRun: config.dryRun,
@@ -943,6 +1101,25 @@ async function upsertBatch<T extends JournalistRecord | CreatorRecord>(
     );
 
     if (error) {
+        if (
+            table === "journalist" &&
+            strategy === "xhandle" &&
+            error.message.includes("no unique or exclusion constraint")
+        ) {
+            log("xhandle upsert unsupported, falling back to lookup+insert", {
+                table,
+                attempted: payload.length,
+            });
+            await fallbackInsertByColumn(
+                supabase,
+                table,
+                "xhandle",
+                payload,
+                allowedColumns,
+            );
+            return;
+        }
+
         if (payload.length === 1) {
             if (isCriticalSupabaseError(error.message)) {
                 throw new Error(`Supabase upsert failed for ${table}.${strategy}: ${error.message}`);
@@ -1069,6 +1246,125 @@ async function fallbackInsertBatch<T extends JournalistRecord | CreatorRecord>(
         inserted: insertable.length,
         skippedExisting: records.length - insertable.length,
     });
+}
+
+async function fallbackInsertByColumn(
+    supabase: SupabaseClient,
+    table: TableName,
+    column: "xhandle",
+    records: Record<string, unknown>[],
+    allowedColumns: Set<string>,
+): Promise<void> {
+    const values = Array.from(
+        new Set(records.map((record) => asString(record[column])).filter((value): value is string => Boolean(value))),
+    );
+
+    if (values.length === 0) {
+        return;
+    }
+
+    const existing = await loadExistingByColumn(supabase, table, column, values);
+    const existingValues = new Set(
+        existing
+            .map((row) => asString(row[column]))
+            .filter((value): value is string => Boolean(value)),
+    );
+
+    const insertable = records.filter((record) => {
+        const value = asString(record[column]);
+        return value ? !existingValues.has(value) : false;
+    });
+
+    if (insertable.length === 0) {
+        log("Skipped fallback insert by column because all rows already exist", {
+            table,
+            column,
+            attempted: records.length,
+        });
+        return;
+    }
+
+    const payload = insertable
+        .map((record) => sanitizeForTable(record, allowedColumns))
+        .filter((record) => Object.keys(record).length > 0);
+
+    if (payload.length === 0) {
+        return;
+    }
+
+    const { error } = await withRetry(
+        () => supabase.from(table).insert(payload),
+        `supabase insert ${table}.${column}`,
+    );
+
+    if (error) {
+        if (payload.length === 1) {
+            if (isCriticalSupabaseError(error.message)) {
+                throw new Error(`Supabase fallback insert failed for ${table}.${column}: ${error.message}`);
+            }
+
+            logRecoverableError("Skipped bad record after single-row xhandle fallback insert failure", {
+                table,
+                column,
+                error: error.message,
+                record: payload[0],
+            });
+            return;
+        }
+
+        log("Fallback xhandle insert batch failed, retrying rows individually", {
+            table,
+            column,
+            attempted: payload.length,
+            error: error.message,
+        });
+
+        for (const row of payload) {
+            await fallbackInsertByColumn(
+                supabase,
+                table,
+                column,
+                [row],
+                new Set(Object.keys(row)),
+            );
+        }
+        return;
+    }
+
+    stats.rowsWritten += payload.length;
+    log("Inserted fallback batch by column", {
+        table,
+        column,
+        attempted: records.length,
+        inserted: payload.length,
+        skippedExisting: records.length - payload.length,
+    });
+}
+
+async function loadExistingByColumn(
+    supabase: SupabaseClient,
+    table: TableName,
+    column: "xhandle",
+    values: string[],
+): Promise<ExistingRow[]> {
+    const rows: ExistingRow[] = [];
+
+    for (const batch of chunk(values, DEFAULT_BATCH_SIZE)) {
+        const { data, error } = await supabase
+            .from(table)
+            .select(column)
+            .in(column, batch);
+
+        if (error) {
+            throw new Error(`Supabase lookup failed for ${table}.${column}: ${error.message}`);
+        }
+
+        if (Array.isArray(data)) {
+            rows.push(...data);
+        }
+    }
+
+    return rows;
 }
 
 async function loadFallbackCandidates<T extends JournalistRecord | CreatorRecord>(

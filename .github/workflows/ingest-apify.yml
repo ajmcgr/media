@@ -34,7 +34,7 @@ jobs:
     env:
       APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
       APIFY_DATASET_IDS: ${{ secrets.APIFY_DATASET_IDS }}
-      APIFY_TASK_IDS: ${{ secrets.APIFY_TASK_IDS }}
+      APIFY_TASK_IDS: ${{ secrets.APIFY_TASK_IDS || 'R6TlqXbiPu3Rz5ySe' }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}

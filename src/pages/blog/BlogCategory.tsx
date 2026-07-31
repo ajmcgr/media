@@ -7,7 +7,7 @@ import { summarise } from "@/lib/blog/derive";
 import { BLOG_CATEGORIES, getCategory } from "@/lib/blog/categories";
 import PostCard from "@/components/blog/PostCard";
 import ContextualCTA from "@/components/blog/ContextualCTA";
-import NotFound from "./NotFound";
+import NotFound from "../NotFound";
 
 const SITE = "https://trymedia.ai";
 

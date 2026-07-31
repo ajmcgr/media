@@ -164,7 +164,8 @@ const App = () => (
               <Route path="/about" element={<About />} />
               <Route path="/media-kit" element={<MediaKit />} />
               <Route path="/blog" element={<Blog />} />
-              <Route path="/blog/:slug" element={<BlogPost />} />
+              <Route path="/blog/category/:slug" element={<BlogCategory />} />
+              <Route path="/blog/guide/:slug" element={<BlogPillar />} />
               <Route path="/privacy" element={<Privacy />} />
               <Route path="/terms" element={<Terms />} />
 

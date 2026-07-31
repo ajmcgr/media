@@ -145,7 +145,7 @@ export function summarise(post: BlogPost): PostSummary {
 
 const STOPWORDS = new Set([
   "the", "and", "for", "with", "that", "your", "you", "how", "why", "what", "from", "this",
-  "into", "are", "not", "但", "when", "their", "them", "than", "then", "have", "has", "will",
+  "into", "are", "not", "was", "when", "their", "them", "than", "then", "have", "has", "will",
   "can", "get", "use", "using", "guide", "best", "top", "way", "ways",
 ]);
 

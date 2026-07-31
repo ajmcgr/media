@@ -1,110 +1,70 @@
-# Keyword Monitor — Fix & Upgrade Plan
+## Constraint that shapes everything
 
-This is a large, multi-layer change. Below is the scoped plan before any code is touched. No chat/database/enrichment work. No full redesign.
+The daily pipeline is: `pg_cron` → `blog-generate` edge function → insert into `blog_posts` (slug, title, description, image, content, topic, published) → `useBlog` reads it → `/blog` and `/blog/:slug` render it.
 
-## 1. Branding rename: Brand Monitor → Keyword Monitor
+Every feature below is **derived at render time from those existing columns** (or added as nullable columns the generator fills in automatically). No manual tagging, no CMS step, no change to cron. If a feature can't be derived automatically, it's dropped — noted at the bottom.
 
-Search/replace across:
-- `src/pages/app/Monitor.tsx` (title, subtitles, empty states, buttons)
-- `src/components/Header.tsx` / sidebar nav links
-- `src/pages/Index.tsx` (homepage card if present)
-- `src/hooks/useMonitor.ts` (comments only — keep DB table names)
-- Edge function email subjects/bodies (`monitor-check`, `monitor-run-all`)
+## Phase 1 — Derivation layer (no visible change, everything else depends on it)
 
-New subtitle: *"Track brands, founders, competitors, products, and keywords across Google News."*
+A single `src/lib/blog/derive.ts` that turns a raw post into an enriched post:
 
-DB table names (`brand_monitors`, `monitor_updates`, `monitor_snapshots`) stay — only UI strings change.
+- **Reading time** — word count from HTML.
+- **Category** — keyword-match the title/topic/content against the 14 category definitions; falls back to "PR Strategy". Zero config for new posts.
+- **Headings / table of contents** — parse `h2`/`h3` out of content, inject stable `id` anchors.
+- **Key takeaways / TL;DR** — first list or first paragraph pulled from the article body.
+- **FAQ** — detect `h2/h3` ending in "?" plus their answer, emit as FAQ block + FAQ schema.
+- **Related articles** — score by shared category, topic and title-term overlap.
+- **Contextual CTA** — map category → the right product CTA (journalist search, media list builder, creator search, pitch generator, press release generator).
+- **Related tools / comparison pages / product features** — same category map, wired to existing `/tools`, `/compare`, `/guides`, `/discover` routes.
+- **Author** — single editorial author record (Media AI editorial team) with bio + expertise, applied to every post.
 
-## 2. Database schema additions (migration)
+## Phase 2 — Article page rebuild (`/blog/:slug`)
 
-Extend `brand_monitors`:
-- `founder_names text[] default '{}'`
-- `product_names text[] default '{}'`
-- `digest_last_sent_at timestamptz`
-- `last_status text` (last run status: ok / error / no_results)
-- `last_error text`
-- `last_mentions_found int default 0`
+Premium docs-style layout (Stripe/Linear feel): reading-progress bar, sticky right-hand TOC, wider type scale, better tables/lists/quotes/callouts, mobile + dark mode + a11y pass.
 
-Extend `monitor_updates` (additive — keep existing rows):
-- `mention_type text` ('brand' | 'competitor' | 'founder' | 'keyword' | 'product')
-- `matched_keyword text`
-- `source text` ('google_news' | 'blog' | 'news_site' | 'newsletter')
-- `title text`
-- `publisher text`
-- `published_at timestamptz`
-- `image_url text`
-- `sentiment text` ('positive' | 'neutral' | 'negative')
+Auto-inserted blocks: TL;DR card, key takeaways, reading time, published + last-updated dates, author bio card, FAQ accordion, copy-link + social share, previous/next article, related-articles grid, contextual CTA block, related tools/comparisons rail.
 
-Existing `summary`, `why_it_matters`, `pr_score` columns stay (still used by AI evaluation path); new schema makes them optional.
+Schema: Article, FAQPage, BreadcrumbList, Person (author), Organization. Canonical, OG, Twitter cards per post.
 
-## 3. Backend: rewrite `monitor-check` around Google News
+## Phase 3 — Blog homepage rebuild (`/blog`)
 
-Replace the current "fetch & diff brand website" approach with a Google News RSS / search pipeline:
+Sections all computed from the live post list: Featured (newest), Latest, Trending + Most Read (view counts, see below), Editor's Picks (highest-signal heuristic: has FAQ + longest + recent), Recently Updated, Popular categories grid, client-side search over titles/descriptions/categories. Cards show reading time, category, author, dates.
 
-- For each `brand_names + founder_names + competitor_urls (host) + keywords + products`, query Google News RSS:
-  `https://news.google.com/rss/search?q=<term>&hl=en-US&gl=US&ceid=US:en`
-- Parse items (title, link, pubDate, source, snippet, image enclosure when present).
-- Skip items already stored (dedupe by `(monitor_id, url)`).
-- Lightweight sentiment (rule-based on title — fast & free; AI optional flag).
-- Insert into `monitor_updates` with new columns populated.
-- Update `brand_monitors.last_checked_at`, `last_status`, `last_error`, `last_mentions_found`.
-- Return `{ ok, inserted, results }`.
-- Proper CORS on every response (already OK pattern). Structured `{ error, details }`.
+## Phase 4 — Category landing pages
 
-Add log lines: `MONITOR_RUN_CHECK_STARTED/FINISHED`, `MONITOR_SCHEDULED_CHECK_STARTED/FINISHED`, `MONITOR_EMAIL_SENT`.
+`/blog/category/:slug` for all 14 categories, each with its own SEO title/description/H1/intro copy and an auto-filtered post list. New posts land in a category automatically via Phase 1.
 
-Keep `monitor-run-all` cron (already wired) — just calls the new `monitor-check` per active monitor.
+## Phase 5 — Pillar hubs
 
-## 4. Email digests (Resend via gateway)
+Six pillar pages (`/blog/guide/:slug`: PR, Journalist Outreach, Influencer Marketing, Product Launch PR, Media Lists, Press Releases) with hand-written evergreen framing plus an auto-updating list of every matching article.
 
-In `monitor-check`:
-- `instant` → email per high-priority mention (founder mention, competitor major coverage, negative sentiment, keyword spike).
-- `daily` / `weekly` → only sent by `monitor-run-all` when `digest_last_sent_at` is older than 24h / 7d. Bundle top mentions into branded HTML using existing `_shared/email-template.ts`. CTA button "Open Keyword Monitor".
+## Phase 6 — SEO plumbing
 
-## 5. Frontend: `src/pages/app/Monitor.tsx`
+- Dynamic `sitemap.xml` (edge function) so every new post is listed the moment it publishes; keep existing static entries and all current URLs.
+- RSS feed edge function at `/rss.xml`.
+- robots.txt updated with the sitemap index.
+- Lazy images, `width`/`height` to kill CLS, LCP preload on the featured image, route-level code splitting for the blog bundle.
 
-Keep current layout. Add (compact, not bloated):
+## Phase 7 — Generator upgrade (still fully automatic)
 
-- **Header row**: title "Keyword Monitor" + tiny `Powered by Google News` badge with Google logo (asset path: `/google-news.svg` — placeholder until user provides the asset; I'll add a fallback inline SVG).
-- **Trust row** (small muted icons): Google News · Daily monitoring · Email alerts · Competitor tracking.
-- **KPI cards** (5 small cards): Total · Today · Competitor · Positive · Negative.
-- **Charts** (recharts, already in deps): mentions-over-time line + source pie + sentiment bar. 7d / 30d toggle.
-- **Updates list**: mention badges (type + source) + publisher + published_at + image thumbnail when available.
-- **Per-monitor debug strip** (collapsed): last check time / status / mentions found / last error.
-- **Run check** handler: console logs (`MONITOR_RUN_CHECK_CLICKED`, `_PAYLOAD`, `_RESPONSE`), invalidate queries, toast `Found X new mentions` / `No new mentions found.`
-- **Form**: add `founder_names` and `product_names` inputs; rename "Brand" form labels to "Keyword Monitor".
+Extend `blog-generate`'s prompt so every future article ships with: question-style H2s, a definitions block, at least one comparison table, statistics with citations, a bullet summary, an FAQ section, and callout/checklist blocks — i.e. the visual variety and AI-search quotability requirements are produced at write time. Add nullable `category`, `takeaways`, `faq`, `updated_at`, `views` columns; the function fills them, and the render layer falls back to Phase 1 derivation for the ~existing back catalogue. Backfill migration is additive only.
 
-## 6. Hook updates: `src/hooks/useMonitor.ts`
+## Phase 8 — Signature "Media Intelligence" cards
 
-- Type extensions for new fields on `BrandMonitor` / `MonitorUpdate`.
-- New `useMonitorStats(monitorId?)` returning aggregated counts for KPI cards (client-side reduce over `useUpdates` results — no extra round trip).
-
-## 7. Homepage card (`src/pages/Index.tsx`)
-
-If a "Brand Monitor" card exists, rename to "Keyword Monitor" + small Google badge. Show: mentions today, active keywords, latest mention headline, sentiment trend dot. Skip if no such card exists today (will check).
-
-## 8. Out of scope (explicit)
-
-- No chat / database / enrichment changes.
-- No global redesign — only Monitor page + homepage card + nav label.
-- No new tables for things that fit existing ones.
+Insight cards (Journalist Insight / Trend / Pitch Tip / Media Stat) generated per article by the same edge function and stored on the post, rendered inline. Only real, database-derived or model-generated-with-source numbers — no invented stats presented as research.
 
 ## Technical notes
 
-- Google News RSS is free and unauthenticated. Reasonable rate (one request per term, sequential, ~10 max per monitor per run). Timeout 15s per fetch.
-- RSS parsing: minimal regex parser inside the edge function (no extra deps).
-- Sentiment: simple positive/negative wordlist on the title. Marked clearly as heuristic.
-- `recharts` is already installed (used elsewhere) — verify before importing.
-- New columns added with `default` values so existing rows remain valid.
-- Migration is additive; nothing destructive.
+- New columns are nullable with defaults; the running cron keeps working unchanged even before the migration is applied.
+- All existing URLs (`/blog`, `/blog/:slug`, `/resources/blog` redirect) are preserved.
+- View counts for Trending/Most Read need a `blog_views` table + an increment RPC — small, automatic, no manual work.
+- Programmatic SEO (section 18) already exists via `seo_pages` + `/discover`; I'll link it into the blog rather than rebuild it.
 
-## Deliverables order
+## Deliberately out of scope (can't be automated, per your rule)
 
-1. Migration (extend tables).
-2. Edge function rewrite (`monitor-check`) + small `monitor-run-all` tweak for digests.
-3. Hook + types update.
-4. Monitor page UI (KPIs, charts, badges, debug, run-check logs/toasts, founder/product inputs, Google badge, trust row).
-5. Nav + homepage rename + card.
-6. QA: run preview, click Run check on existing monitor, confirm network call, confirm rows, confirm UI refresh.
+- **Interactive tools** (subject-line analyzer, ROI calculator, etc.) — these are separate products, not blog automation; worth a dedicated follow-up.
+- **Multilingual / hreflang** — needs a translation pipeline; would add a manual step per article today.
+- **Expert quotes and real research citations** — an LLM can't source these reliably; I'll render citations when the generator produces linkable sources and omit the block otherwise.
+- **New competitor comparison pages** — `/compare` already exists; I'll extend the list there if you want, but it's hand-written content, not automated.
 
-Approve and I'll ship in this order.
+Want me to build all phases in order, or start with 1–3 (the highest-impact visible change) and review before continuing?

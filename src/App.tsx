@@ -21,6 +21,8 @@ import About from "./pages/About";
 import MediaKit from "./pages/MediaKit";
 import Blog from "./pages/Blog";
 import BlogPost from "./pages/BlogPost";
+import BlogCategory from "./pages/blog/BlogCategory";
+import BlogPillar from "./pages/blog/BlogPillar";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import NotFound from "./pages/NotFound";
@@ -162,6 +164,8 @@ const App = () => (
               <Route path="/about" element={<About />} />
               <Route path="/media-kit" element={<MediaKit />} />
               <Route path="/blog" element={<Blog />} />
+              <Route path="/blog/category/:slug" element={<BlogCategory />} />
+              <Route path="/blog/guide/:slug" element={<BlogPillar />} />
               <Route path="/blog/:slug" element={<BlogPost />} />
               <Route path="/privacy" element={<Privacy />} />
               <Route path="/terms" element={<Terms />} />

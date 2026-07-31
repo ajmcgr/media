@@ -21,6 +21,8 @@ import About from "./pages/About";
 import MediaKit from "./pages/MediaKit";
 import Blog from "./pages/Blog";
 import BlogPost from "./pages/BlogPost";
+import BlogCategory from "./pages/blog/BlogCategory";
+import BlogPillar from "./pages/blog/BlogPillar";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import NotFound from "./pages/NotFound";

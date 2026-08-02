@@ -3,6 +3,7 @@
 // an optional cover image. This keeps cron from timing out before a post exists.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { generateAndStoreBlogImages } from "../_shared/blog-image.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -177,7 +178,14 @@ async function generateAndInsert(topic: string, options: { skipIfRecent?: boolea
   if (error) throw error;
 
   console.log("blog-generate inserted", { id: inserted.id, slug });
-  await attachCoverImage(supabase, inserted.id, post.title);
+  await attachCoverImage(supabase, inserted.id, {
+    slug,
+    title: post.title,
+    description: post.description,
+    content: post.content,
+    topic,
+    published: (inserted as { published?: string }).published ?? null,
+  });
   return inserted;
 }
 

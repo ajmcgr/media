@@ -7,7 +7,11 @@
 import { Image } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
-const IMAGE_MODELS = ["gemini-2.5-flash-image", "gemini-2.0-flash-preview-image-generation"];
+const IMAGE_MODELS: { model: string; aspect?: boolean }[] = [
+  { model: "gemini-3.1-flash-image", aspect: true },
+  { model: "gemini-3-pro-image", aspect: true },
+  { model: "gemini-2.5-flash-image" },
+];
 const TEXT_MODEL = "gemini-2.5-flash";
 export const BUCKET = "blog";
 
@@ -85,11 +89,14 @@ export async function buildImagePrompt(post: Post): Promise<string> {
 
 async function generateOnce(prompt: string): Promise<Uint8Array> {
   let lastErr: unknown;
-  for (const model of IMAGE_MODELS) {
+  for (const { model, aspect } of IMAGE_MODELS) {
     try {
       const json = await gemini(model, {
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
+        generationConfig: {
+          responseModalities: ["TEXT", "IMAGE"],
+          ...(aspect ? { imageConfig: { aspectRatio: "16:9" } } : {}),
+        },
       });
       const parts = json.candidates?.[0]?.content?.parts ?? [];
       const inline = parts.find((p: { inlineData?: { data?: string } }) => p.inlineData?.data);

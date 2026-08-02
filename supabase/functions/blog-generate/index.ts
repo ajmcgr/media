@@ -3,6 +3,7 @@
 // an optional cover image. This keeps cron from timing out before a post exists.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { generateAndStoreBlogImages } from "../_shared/blog-image.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -120,51 +121,20 @@ async function getLatestPostCreatedAt(supabase: BlogSupabaseClient) {
   return createdAt || null;
 }
 
-async function attachCoverImage(supabase: BlogSupabaseClient, postId: string, title: string) {
+async function attachCoverImage(supabase: BlogSupabaseClient, postId: string, post: {
+  slug: string;
+  title: string;
+  description: string;
+  content: string;
+  topic: string;
+  published?: string | null;
+}) {
   try {
-    const openaiKey = requiredEnv("OPENAI_API_KEY");
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 45_000);
-
-    const imgRes = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: "dall-e-3",
-        prompt: `Editorial blog cover image for an article titled "${title}". Minimalist, modern, professional, abstract, no text.`,
-        size: "1792x1024",
-        n: 1,
-        response_format: "b64_json",
-      }),
-    }).finally(() => clearTimeout(timeout));
-
-    if (!imgRes.ok) {
-      console.error("blog-generate image failed", imgRes.status, await imgRes.text());
-      return;
-    }
-
-    const json = await imgRes.json();
-    const b64 = json.data?.[0]?.b64_json as string | undefined;
-    if (!b64) return;
-
-    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-    const path = `auto/${Date.now()}-${slugify(title)}.png`;
-    const { error: uploadError } = await supabase.storage
-      .from("blog")
-      .upload(path, bytes, { contentType: "image/png", upsert: false });
-
-    if (uploadError) {
-      console.error("blog-generate image upload failed", uploadError.message);
-      return;
-    }
-
-    const { data: pub } = supabase.storage.from("blog").getPublicUrl(path);
+    const image = await generateAndStoreBlogImages(supabase as never, post as never);
     const { error: updateError } = await supabase
       .from("blog_posts")
-      .update({ image: pub.publicUrl })
+      .update({ image })
       .eq("id", postId);
-
     if (updateError) console.error("blog-generate image update failed", updateError.message);
   } catch (err) {
     console.error("blog-generate image failed", err);
@@ -208,7 +178,14 @@ async function generateAndInsert(topic: string, options: { skipIfRecent?: boolea
   if (error) throw error;
 
   console.log("blog-generate inserted", { id: inserted.id, slug });
-  await attachCoverImage(supabase, inserted.id, post.title);
+  await attachCoverImage(supabase, inserted.id, {
+    slug,
+    title: post.title,
+    description: post.description,
+    content: post.content,
+    topic,
+    published: (inserted as { published?: string }).published ?? null,
+  });
   return inserted;
 }
 

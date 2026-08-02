@@ -86,3 +86,6 @@ verify_jwt = false
 [functions.send-export-notification]
 verify_jwt = false
 
+
+[functions.blog-image-generate]
+verify_jwt = false

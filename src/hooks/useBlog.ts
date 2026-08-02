@@ -23,7 +23,7 @@ export const useBlogPosts = () => {
         .order("published", { ascending: false });
       const dynamic = (!error && Array.isArray(data) ? (data as BlogPost[]) : []).map((p) => ({
         ...p,
-        image: p.image || "/placeholder.svg",
+        image: p.image || "",
       }));
       const seen = new Set(dynamic.map((p) => p.slug));
       const merged = [...dynamic, ...STATIC_POSTS.filter((p) => !seen.has(p.slug))];

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import Layout from "@/components/Layout";
 import { Helmet } from "react-helmet-async";
+import { blogImage, blogOgImage } from "@/lib/blog/images";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Clock, CalendarDays, Gauge } from "lucide-react";
 import { useBlogPost, useBlogPosts } from "@/hooks/useBlog";
@@ -57,7 +58,7 @@ const BlogPost = () => {
       "@type": "Article",
       headline: enriched.title,
       description: enriched.description,
-      image: enriched.image ? [enriched.image] : undefined,
+      image: [blogOgImage(enriched.image)],
       datePublished: enriched.published,
       dateModified: enriched.updated,
       articleSection: cat.name,
@@ -104,7 +105,10 @@ const BlogPost = () => {
         <meta property="og:type" content="article" />
         <meta property="og:title" content={enriched.title} />
         <meta property="og:description" content={enriched.description} />
-        {enriched.image && <meta property="og:image" content={enriched.image} />}
+        <meta property="og:image" content={blogOgImage(enriched.image)} />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta name="twitter:image" content={blogOgImage(enriched.image)} />
         <meta property="og:url" content={url} />
         <meta property="article:published_time" content={enriched.published} />
         <meta property="article:section" content={cat.name} />
@@ -168,10 +172,10 @@ const BlogPost = () => {
               </div>
             </header>
 
-            {enriched.image && (
+            {(
               <div className="mb-10 overflow-hidden rounded-2xl bg-muted">
                 <img
-                  src={enriched.image}
+                  src={blogImage(enriched.image, "hero")}
                   alt={`Illustration for “${enriched.title}”`}
                   width={1600}
                   height={900}

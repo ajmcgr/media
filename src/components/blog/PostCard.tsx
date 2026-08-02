@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Clock } from "lucide-react";
 import type { PostSummary } from "@/lib/blog/derive";
 import { formatDate } from "@/lib/blog/derive";
+import { blogImage } from "@/lib/blog/images";
 
 type Props = {
   post: PostSummary;
@@ -30,7 +31,7 @@ const PostCard = ({ post, variant = "default" }: Props) => {
       <Link to={`/blog/${post.slug}`} className="group grid gap-8 md:grid-cols-2 md:items-center">
         <div className="aspect-[16/10] overflow-hidden rounded-2xl bg-muted">
           <img
-            src={post.image || "/placeholder.svg"}
+            src={blogImage(post.image, "hero")}
             alt={post.title}
             width={1200}
             height={750}
@@ -58,7 +59,7 @@ const PostCard = ({ post, variant = "default" }: Props) => {
     <Link to={`/blog/${post.slug}`} className="group block">
       <div className="aspect-[16/10] overflow-hidden rounded-xl bg-muted mb-5">
         <img
-          src={post.image || "/placeholder.svg"}
+          src={blogImage(post.image, "card")}
           alt={post.title}
           loading="lazy"
           width={800}

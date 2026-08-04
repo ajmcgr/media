@@ -17,45 +17,40 @@ const TEXT_MODELS = ["gemini-3.5-flash", "gemini-flash-latest", "gemini-2.0-flas
 export const BUCKET = "blog";
 
 const STYLE = [
-  "Premium editorial artwork for a modern SaaS technology brand.",
-  "Abstract and conceptual rather than literal.",
-  "Minimal composition, generous negative space, soft gradients,",
-  "high contrast, refined light-blue / slate / off-white palette with a single accent,",
-  "crisp geometry, subtle depth, magazine-quality art direction for a founder audience.",
-  "Absolutely no text, letters, numbers, logos, watermarks, UI screenshots,",
-  "no clipart, no stock-photo people, no robots, no glowing brains, no random icons.",
+  "Flat two-colour vector illustration in a simple silhouette style, exactly like a brand icon.",
+  "ONLY two colours: pure white background (#FFFFFF) and a single brand blue (#1675E2).",
+  "No gradients, no shading, no textures, no photographic elements, no 3D, no glow, no noise.",
+  "Bold clean geometry with smooth edges, generous white negative space, centred composition,",
+  "solid blue shapes on white — the look of a crisp SVG pictogram scaled large.",
+  "Absolutely no text, letters, numbers, logos, watermarks, UI screenshots, clipart,",
+  "no stock-photo people, no robots, no glowing brains, no extra accent colours.",
 ].join(" ");
 
 // Deterministic per-slug art direction so two posts never render the same image,
 // even when the art-director model is unavailable and we fall back to the title.
 const COMPOSITIONS = [
-  "a single large sweeping arc crossing the frame diagonally",
-  "layered translucent panes overlapping off-centre",
-  "a loose grid of thin lines dissolving toward one corner",
-  "concentric rings drifting out of alignment",
-  "a tall column of stacked soft ribbons",
-  "scattered geometric shards orbiting an empty centre",
-  "a smooth folded surface catching raking light",
-  "two intersecting planes with a narrow bright seam",
+  "one large centred silhouette shape with small satellite shapes",
+  "a simple repeating pattern of solid blue silhouettes across the frame",
+  "a single bold silhouette off-centre with wide white space beside it",
+  "overlapping flat blue silhouettes forming one combined shape",
+  "a row of stacked flat blue bars and simple silhouette forms",
+  "a circular blue field with a white silhouette knocked out of it",
+  "a minimal line-and-shape pictogram, thick uniform blue strokes on white",
+  "two mirrored blue silhouettes with a narrow white gap between them",
 ];
 const ACCENTS = [
-  "electric blue",
-  "warm amber",
-  "deep indigo",
-  "soft coral",
-  "teal",
-  "violet",
-  "graphite with a pale mint accent",
-  "cobalt with cream highlights",
+  "solid brand blue #1675E2 on white",
+  "brand blue #1675E2 with a lighter blue tint (#8FBDF1) as the only secondary tone",
+  "brand blue #1675E2 knocked out in white on a blue field",
+  "brand blue #1675E2 with a deeper blue (#0F4F9E) for the second flat tone",
 ];
 const MOODS = [
-  "cool daylight, airy and calm",
-  "low-key with dramatic side light",
-  "bright high-key and optimistic",
-  "dusk gradient, quiet and reflective",
-  "matte, flat and graphic",
-  "glossy with soft specular highlights",
+  "flat, graphic and iconographic",
+  "clean, minimal and confident",
+  "bold, poster-like and simple",
+  "quiet, spacious and precise",
 ];
+
 
 function hashSlug(slug: string) {
   let h = 2166136261;

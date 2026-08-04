@@ -12,7 +12,8 @@ const IMAGE_MODELS: { model: string; aspect?: boolean }[] = [
   { model: "gemini-3-pro-image", aspect: true },
   { model: "gemini-2.5-flash-image" },
 ];
-const TEXT_MODEL = "gemini-2.5-flash";
+// Text models are versioned aggressively; try newest first and fall back.
+const TEXT_MODELS = ["gemini-3.5-flash", "gemini-flash-latest", "gemini-2.0-flash"];
 export const BUCKET = "blog";
 
 const STYLE = [
@@ -24,6 +25,57 @@ const STYLE = [
   "Absolutely no text, letters, numbers, logos, watermarks, UI screenshots,",
   "no clipart, no stock-photo people, no robots, no glowing brains, no random icons.",
 ].join(" ");
+
+// Deterministic per-slug art direction so two posts never render the same image,
+// even when the art-director model is unavailable and we fall back to the title.
+const COMPOSITIONS = [
+  "a single large sweeping arc crossing the frame diagonally",
+  "layered translucent panes overlapping off-centre",
+  "a loose grid of thin lines dissolving toward one corner",
+  "concentric rings drifting out of alignment",
+  "a tall column of stacked soft ribbons",
+  "scattered geometric shards orbiting an empty centre",
+  "a smooth folded surface catching raking light",
+  "two intersecting planes with a narrow bright seam",
+];
+const ACCENTS = [
+  "electric blue",
+  "warm amber",
+  "deep indigo",
+  "soft coral",
+  "teal",
+  "violet",
+  "graphite with a pale mint accent",
+  "cobalt with cream highlights",
+];
+const MOODS = [
+  "cool daylight, airy and calm",
+  "low-key with dramatic side light",
+  "bright high-key and optimistic",
+  "dusk gradient, quiet and reflective",
+  "matte, flat and graphic",
+  "glossy with soft specular highlights",
+];
+
+function hashSlug(slug: string) {
+  let h = 2166136261;
+  for (let i = 0; i < slug.length; i += 1) {
+    h ^= slug.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return Math.abs(h);
+}
+
+function variationFor(slug: string) {
+  const h = hashSlug(slug || String(Math.random()));
+  return [
+    `Composition: ${COMPOSITIONS[h % COMPOSITIONS.length]}.`,
+    `Accent colour: ${ACCENTS[Math.floor(h / 7) % ACCENTS.length]}.`,
+    `Lighting and mood: ${MOODS[Math.floor(h / 13) % MOODS.length]}.`,
+    "Make this image visually distinct from other artwork in the same series.",
+  ].join(" ");
+}
+
 
 type Post = {
   slug: string;

@@ -122,7 +122,8 @@ export async function buildImagePrompt(post: Post): Promise<string> {
         systemInstruction: {
           parts: [{
             text:
-              "You are an art director for a premium SaaS media brand. Read the article and reply with ONE sentence (max 45 words) describing an abstract, conceptual image that represents the article's core idea. Describe shapes, composition, motion and colour — never text, people, logos or literal objects like robots or brains. Reply with the sentence only.",
+              "You are an icon designer for a SaaS media brand. Read the article and reply with ONE sentence (max 35 words) describing a SIMPLE flat two-colour silhouette illustration (blue on white) that represents the article's core idea. Only simple bold shapes and silhouettes — never text, faces, gradients, shading, photos, logos, robots or brains. Reply with the sentence only.",
+
           }],
         },
         contents: [{ role: "user", parts: [{ text: brief }] }],

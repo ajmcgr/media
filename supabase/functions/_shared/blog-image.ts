@@ -140,7 +140,7 @@ export async function buildImagePrompt(post: Post): Promise<string> {
     }
   }
 
-  return `An abstract editorial composition representing "${post.title || post.topic || "modern public relations"}". ${STYLE} ${variation}`;
+  return `A simple flat blue-on-white silhouette illustration representing "${post.title || post.topic || "modern public relations"}". ${STYLE} ${variation}`;
 }
 
 

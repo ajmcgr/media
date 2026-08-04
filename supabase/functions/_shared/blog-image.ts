@@ -101,13 +101,19 @@ async function gemini(model: string, body: Record<string, unknown>) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`gemini ${model} ${res.status}: ${(await res.text()).slice(0, 400)}`);
-  return await res.json();
+  const text = await res.text();
+  if (!res.ok) throw new Error(`gemini ${model} ${res.status}: ${text.slice(0, 400)}`);
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`gemini ${model} non-JSON response: ${text.slice(0, 200)}`);
+  }
 }
 
 /** Derive a concise visual prompt from the whole article, not just the title. */
 export async function buildImagePrompt(post: Post): Promise<string> {
   const excerpt = strip(post.content || "").slice(0, 2500);
+  const variation = variationFor(post.slug || post.title || "");
   const brief = [
     `Title: ${post.title || ""}`,
     `Excerpt: ${post.description || ""}`,
@@ -115,29 +121,32 @@ export async function buildImagePrompt(post: Post): Promise<string> {
     `Body: ${excerpt}`,
   ].join("\n");
 
-  try {
-    const json = await gemini(TEXT_MODEL, {
-      systemInstruction: {
-        parts: [{
-          text:
-            "You are an art director for a premium SaaS media brand. Read the article and reply with ONE sentence (max 45 words) describing an abstract, conceptual image that represents the article's core idea. Describe shapes, composition, motion and colour — never text, people, logos or literal objects like robots or brains. Reply with the sentence only.",
-        }],
-      },
-      contents: [{ role: "user", parts: [{ text: brief }] }],
-      generationConfig: { temperature: 0.7, maxOutputTokens: 200 },
-    });
-    const idea = (json.candidates?.[0]?.content?.parts ?? [])
-      .map((p: { text?: string }) => p.text || "")
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (idea) return `${idea} ${STYLE}`;
-  } catch (err) {
-    console.error("blog-image prompt fallback", err);
+  for (const model of TEXT_MODELS) {
+    try {
+      const json = await gemini(model, {
+        systemInstruction: {
+          parts: [{
+            text:
+              "You are an art director for a premium SaaS media brand. Read the article and reply with ONE sentence (max 45 words) describing an abstract, conceptual image that represents the article's core idea. Describe shapes, composition, motion and colour — never text, people, logos or literal objects like robots or brains. Reply with the sentence only.",
+          }],
+        },
+        contents: [{ role: "user", parts: [{ text: brief }] }],
+        generationConfig: { temperature: 1, maxOutputTokens: 200 },
+      });
+      const idea = (json.candidates?.[0]?.content?.parts ?? [])
+        .map((p: { text?: string }) => p.text || "")
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (idea) return `${idea} ${STYLE} ${variation}`;
+    } catch (err) {
+      console.error("blog-image prompt model failed", model, err);
+    }
   }
 
-  return `An abstract editorial composition representing "${post.title || post.topic || "modern public relations"}". ${STYLE}`;
+  return `An abstract editorial composition representing "${post.title || post.topic || "modern public relations"}". ${STYLE} ${variation}`;
 }
+
 
 async function generateOnce(prompt: string): Promise<Uint8Array> {
   let lastErr: unknown;

@@ -12,7 +12,8 @@ const IMAGE_MODELS: { model: string; aspect?: boolean }[] = [
   { model: "gemini-3-pro-image", aspect: true },
   { model: "gemini-2.5-flash-image" },
 ];
-const TEXT_MODEL = "gemini-2.5-flash";
+// Text models are versioned aggressively; try newest first and fall back.
+const TEXT_MODELS = ["gemini-3.5-flash", "gemini-flash-latest", "gemini-2.0-flash"];
 export const BUCKET = "blog";
 
 const STYLE = [
@@ -24,6 +25,57 @@ const STYLE = [
   "Absolutely no text, letters, numbers, logos, watermarks, UI screenshots,",
   "no clipart, no stock-photo people, no robots, no glowing brains, no random icons.",
 ].join(" ");
+
+// Deterministic per-slug art direction so two posts never render the same image,
+// even when the art-director model is unavailable and we fall back to the title.
+const COMPOSITIONS = [
+  "a single large sweeping arc crossing the frame diagonally",
+  "layered translucent panes overlapping off-centre",
+  "a loose grid of thin lines dissolving toward one corner",
+  "concentric rings drifting out of alignment",
+  "a tall column of stacked soft ribbons",
+  "scattered geometric shards orbiting an empty centre",
+  "a smooth folded surface catching raking light",
+  "two intersecting planes with a narrow bright seam",
+];
+const ACCENTS = [
+  "electric blue",
+  "warm amber",
+  "deep indigo",
+  "soft coral",
+  "teal",
+  "violet",
+  "graphite with a pale mint accent",
+  "cobalt with cream highlights",
+];
+const MOODS = [
+  "cool daylight, airy and calm",
+  "low-key with dramatic side light",
+  "bright high-key and optimistic",
+  "dusk gradient, quiet and reflective",
+  "matte, flat and graphic",
+  "glossy with soft specular highlights",
+];
+
+function hashSlug(slug: string) {
+  let h = 2166136261;
+  for (let i = 0; i < slug.length; i += 1) {
+    h ^= slug.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return Math.abs(h);
+}
+
+function variationFor(slug: string) {
+  const h = hashSlug(slug || String(Math.random()));
+  return [
+    `Composition: ${COMPOSITIONS[h % COMPOSITIONS.length]}.`,
+    `Accent colour: ${ACCENTS[Math.floor(h / 7) % ACCENTS.length]}.`,
+    `Lighting and mood: ${MOODS[Math.floor(h / 13) % MOODS.length]}.`,
+    "Make this image visually distinct from other artwork in the same series.",
+  ].join(" ");
+}
+
 
 type Post = {
   slug: string;
@@ -49,13 +101,19 @@ async function gemini(model: string, body: Record<string, unknown>) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`gemini ${model} ${res.status}: ${(await res.text()).slice(0, 400)}`);
-  return await res.json();
+  const text = await res.text();
+  if (!res.ok) throw new Error(`gemini ${model} ${res.status}: ${text.slice(0, 400)}`);
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`gemini ${model} non-JSON response: ${text.slice(0, 200)}`);
+  }
 }
 
 /** Derive a concise visual prompt from the whole article, not just the title. */
 export async function buildImagePrompt(post: Post): Promise<string> {
   const excerpt = strip(post.content || "").slice(0, 2500);
+  const variation = variationFor(post.slug || post.title || "");
   const brief = [
     `Title: ${post.title || ""}`,
     `Excerpt: ${post.description || ""}`,
@@ -63,29 +121,32 @@ export async function buildImagePrompt(post: Post): Promise<string> {
     `Body: ${excerpt}`,
   ].join("\n");
 
-  try {
-    const json = await gemini(TEXT_MODEL, {
-      systemInstruction: {
-        parts: [{
-          text:
-            "You are an art director for a premium SaaS media brand. Read the article and reply with ONE sentence (max 45 words) describing an abstract, conceptual image that represents the article's core idea. Describe shapes, composition, motion and colour — never text, people, logos or literal objects like robots or brains. Reply with the sentence only.",
-        }],
-      },
-      contents: [{ role: "user", parts: [{ text: brief }] }],
-      generationConfig: { temperature: 0.7, maxOutputTokens: 200 },
-    });
-    const idea = (json.candidates?.[0]?.content?.parts ?? [])
-      .map((p: { text?: string }) => p.text || "")
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (idea) return `${idea} ${STYLE}`;
-  } catch (err) {
-    console.error("blog-image prompt fallback", err);
+  for (const model of TEXT_MODELS) {
+    try {
+      const json = await gemini(model, {
+        systemInstruction: {
+          parts: [{
+            text:
+              "You are an art director for a premium SaaS media brand. Read the article and reply with ONE sentence (max 45 words) describing an abstract, conceptual image that represents the article's core idea. Describe shapes, composition, motion and colour — never text, people, logos or literal objects like robots or brains. Reply with the sentence only.",
+          }],
+        },
+        contents: [{ role: "user", parts: [{ text: brief }] }],
+        generationConfig: { temperature: 1, maxOutputTokens: 200 },
+      });
+      const idea = (json.candidates?.[0]?.content?.parts ?? [])
+        .map((p: { text?: string }) => p.text || "")
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (idea) return `${idea} ${STYLE} ${variation}`;
+    } catch (err) {
+      console.error("blog-image prompt model failed", model, err);
+    }
   }
 
-  return `An abstract editorial composition representing "${post.title || post.topic || "modern public relations"}". ${STYLE}`;
+  return `An abstract editorial composition representing "${post.title || post.topic || "modern public relations"}". ${STYLE} ${variation}`;
 }
+
 
 async function generateOnce(prompt: string): Promise<Uint8Array> {
   let lastErr: unknown;

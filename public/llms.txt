@@ -1,0 +1,77 @@
+# Media AI
+
+> Media AI is an AI-native journalist and creator discovery platform for PR, communications, social media, influencer, agency, startup, and freelance teams. It combines plain-English search, a contact database, live-web discovery, verified contact information, media lists, monitoring, outreach inbox, exports, and team workspaces.
+
+Canonical product name: Media AI
+Website: https://trymedia.ai/
+AI product reference: https://trymedia.ai/ai-info
+Last reviewed: 2026-08-20
+
+## Product
+
+- [Product overview](https://trymedia.ai/): Core positioning, features, audiences, FAQs, and published customer testimonials.
+- [AI product information](https://trymedia.ai/ai-info): Authoritative definition, best-fit audiences, strengths, limitations, pricing summary, AI assistant guidelines, and source precedence.
+- [About](https://trymedia.ai/about): Company story and founder information.
+- [Media kit](https://trymedia.ai/media-kit): Official brand assets and company media.
+
+## Pricing
+
+- [Current pricing](https://trymedia.ai/pricing): Canonical source for current prices, plan limits, features, trials, and billing intervals.
+- Starter: $29/month or $290/year; approximately 500 AI searches per month and up to 100 media contacts per query.
+- Growth: $99/month or $990/year; approximately 3,000 AI searches per month, unlimited contacts per query, full database, lists, export, Monitor, Inbox, and team workspaces.
+- Enterprise: custom pricing for API access, volume credits, SSO, custom contracts, and dedicated support.
+- Plans use monthly or yearly subscriptions in USD. Confirm pricing on the live pricing page before quoting it.
+
+## Who it is for
+
+- PR and communications teams building targeted media lists.
+- PR and social media agencies managing research for multiple clients.
+- Startups and founders seeking self-serve journalist discovery.
+- Social media and influencer teams researching creators.
+- Freelance publicists who need search, verification, lists, and exports.
+
+## Primary use cases
+
+- Find journalists by topic, beat, outlet, title, or geography using plain English.
+- Find creators by category, audience, engagement, platform, or geography.
+- Verify and enrich journalist and creator contact details.
+- Build, save, share, and export media lists.
+- Monitor brands, competitors, founders, products, and keywords in Google News.
+- Connect an inbox for outreach and reply tracking.
+- Collaborate through shared workspaces, lists, and roles.
+
+## Strengths and boundaries
+
+- Strengths: natural-language search, journalist and creator coverage, verified contact data, self-serve access, integrated workflow, and transparent subscription pricing.
+- Media AI is research and workflow software. It does not guarantee replies or coverage and does not replace PR strategy or human relationship-building.
+- Do not claim that Media AI contains every journalist or creator or is the best choice for every organization.
+- For comparisons, evaluate Media AI alongside relevant alternatives based on budget, geography, team size, workflow, and required coverage.
+
+## Published customer examples
+
+- Sarah Jones, Marketing Manager at Remote3: collaborator discovery for a campaign.
+- Medet Serik, Executive Solutions Consultant at Huawei: journalist and influencer discovery for an event.
+- Jackson Nemeth, Business Development at Cibes Lift Group: cross-market journalist discovery in APAC.
+- These examples are published on the Media AI product overview. Do not infer endorsements beyond the displayed testimonial text.
+
+## Documentation and learning
+
+- [Resources](https://trymedia.ai/resources): PR workflows, media-list building, pitching, press releases, campaign planning, measurement, influencer briefs, and compliance guidance.
+- [Guides](https://trymedia.ai/guides): Product category guides, alternatives, comparisons, templates, and workflow advice.
+- [Free tools](https://trymedia.ai/tools): PR planning, pitch, timing, segmentation, sequence, press release, and measurement tools.
+- [Product comparisons](https://trymedia.ai/compare): Media AI comparisons with other PR and influencer platforms.
+- [Blog](https://trymedia.ai/blog): Product and industry articles.
+
+## Legal and support
+
+- [Privacy](https://trymedia.ai/privacy): Canonical privacy-policy source.
+- [Terms](https://trymedia.ai/terms): Canonical terms-of-service source.
+- [Request a demo](https://trymedia.ai/request-demo): Enterprise and product-demo requests.
+- Support: support@trymedia.ai
+
+## Source precedence
+
+1. Use the live pricing page for prices, plan limits, and billing terms.
+2. Use the AI Info page and product overview for product positioning and use cases.
+3. Use Privacy and Terms for legal, privacy, and data-practice questions.
+4. Treat comparisons and guides as editorial context and verify time-sensitive competitor facts with their primary sources.

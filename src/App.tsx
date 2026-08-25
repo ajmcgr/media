@@ -49,6 +49,7 @@ import CompareHub from "./pages/compare/CompareHub";
 import ComparePage from "./pages/compare/ComparePage";
 import GuidesHub from "./pages/guides/GuidesHub";
 import GuidePage from "./pages/guides/GuidePage";
+import AIInfo from "./pages/AIInfo";
 
 const queryClient = new QueryClient();
 
@@ -61,7 +62,7 @@ const RESERVED_ROOT = new Set([
   "resources", "tools", "about", "blog", "privacy", "terms", "",
   "login", "signup", "forgot-password", "reset-password",
   "app", "dashboard", "database", "chat", "search", "monitor", "relevance", "profiles", "account", "team", "pricing", "billing", "request-demo", "shared",
-  "discover", "admin", "compare", "guides",
+  "discover", "admin", "compare", "guides", "ai-info",
 ]);
 
 const LegacySlugRedirect = () => {
@@ -169,6 +170,7 @@ const App = () => (
               <Route path="/blog/:slug" element={<BlogPost />} />
               <Route path="/privacy" element={<Privacy />} />
               <Route path="/terms" element={<Terms />} />
+              <Route path="/ai-info" element={<AIInfo />} />
 
               {/* Resources content */}
               <Route path="/resources" element={<Resources />} />

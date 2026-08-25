@@ -19,6 +19,12 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://trymedia.ai/ai-info</loc>
+    <lastmod>2026-08-20</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://trymedia.ai/tools</loc>
     <lastmod>2026-05-10</lastmod>
     <changefreq>weekly</changefreq>

@@ -9,3 +9,6 @@ Disallow: /auth/
 Disallow: /shared/
 
 Sitemap: https://trymedia.ai/sitemap.xml
+
+# Product information for AI assistants and retrieval systems
+# https://trymedia.ai/llms.txt

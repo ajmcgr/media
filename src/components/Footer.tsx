@@ -64,6 +64,7 @@ const Footer = () => {
       <div className="max-w-6xl mx-auto grid md:grid-cols-6 gap-8 text-sm">
         <FooterCol title="Company" links={[
           ["About", "/about"],
+          ["AI Info", "/ai-info"],
           ["Blog", "/blog"],
           ["Media Kit", "/media-kit"],
           ["Community", "https://chat.whatsapp.com/KKjLvfjPY2ND11cexE0Tae?mode=gi_t"],

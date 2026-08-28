@@ -5,6 +5,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLists } from "@/hooks/useLists";
 import { useMonitors } from "@/hooks/useMonitor";
 import { useTeamWorkspaces, useTeamMembers, useCurrentWorkspace } from "@/hooks/useTeams";
+import { useSubscription } from "@/hooks/useSubscription";
+import { isGrowthPlanIdentifier } from "@/lib/plans";
 
 const DISMISS_KEY = "mediaai.onboarding.dismissed";
 const FIRST_SEARCH_KEY = "mediaai.onboarding.firstSearch";
@@ -26,6 +28,8 @@ type Step = {
 export default function OnboardingChecklist() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { planIdentifier } = useSubscription();
+  const hasGrowth = isGrowthPlanIdentifier(planIdentifier);
   const { data: lists } = useLists(user?.id);
   const { data: monitors } = useMonitors();
   const { data: workspaces } = useTeamWorkspaces(user?.id);
@@ -54,40 +58,39 @@ export default function OnboardingChecklist() {
     };
   }, []);
 
-  const steps: Step[] = useMemo(() => [
-    {
+  const steps: Step[] = useMemo(() => {
+    const coreSteps: Step[] = [{
       id: "search",
       title: "Run your first AI search",
       description: "Ask Media AI to find journalists or creators in plain English.",
       cta: "Start Search",
       href: "/search",
       done: firstSearch,
-    },
-    {
+    }, {
       id: "list",
       title: "Save contacts to a list",
       description: "Build a shortlist you can share or export anytime.",
-      cta: "Browse database",
-      href: "/database",
+      cta: hasGrowth ? "Browse database" : "Open Search",
+      href: hasGrowth ? "/database" : "/search",
       done: (lists?.length ?? 0) > 0,
-    },
-    {
+    }];
+    if (!hasGrowth) return coreSteps;
+    return [...coreSteps, {
       id: "monitor",
       title: "Set up a keyword monitor",
       description: "Track brands, founders, and competitors across Google News.",
       cta: "Open Monitor",
       href: "/monitor",
       done: (monitors?.length ?? 0) > 0,
-    },
-    {
+    }, {
       id: "team",
       title: "Invite a teammate",
       description: "Collaborate on lists and outreach in a shared workspace.",
       cta: "Open Team",
       href: "/team",
       done: (members?.length ?? 0) > 1 || (workspaces?.length ?? 0) > 1,
-    },
-  ], [firstSearch, lists, monitors, members, workspaces]);
+    }];
+  }, [firstSearch, hasGrowth, lists, monitors, members, workspaces]);
 
   const completed = steps.filter((s) => s.done).length;
   const total = steps.length;

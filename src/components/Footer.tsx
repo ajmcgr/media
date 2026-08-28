@@ -116,8 +116,8 @@ const Footer = () => {
         </div>
       </div>
       <p className="text-xs text-muted-foreground text-center mt-12">
-        Copyright © {new Date().getFullYear()} Works App, Inc. Built with 🫶🏻 by{" "}
-        <a href="https://works.xyz" target="_blank" rel="noopener noreferrer" className="hover:text-foreground">Works</a>.
+          Copyright © {new Date().getFullYear()} Works App, Inc. Built with 🫶🏻 by{" "}
+          <a href="http://x.com/alexmacgregor__/" target="_blank" rel="noopener noreferrer" className="hover:text-foreground">Alex</a>.
       </p>
     </footer>
   );

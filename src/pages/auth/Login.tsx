@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import Header from "@/components/Header";
 import GoogleIcon from "@/components/GoogleIcon";
+import { trackEvent } from "@/lib/analytics";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -30,22 +31,22 @@ const Login = () => {
     e.preventDefault();
     setBusy(true);
     const trimmedEmail = email.trim().toLowerCase();
-    console.log("[login] attempt", { email: trimmedEmail });
-    const { data, error } = await supabase.auth.signInWithPassword({
+    trackEvent("login_started", { method: "email", next: from });
+    const { error } = await supabase.auth.signInWithPassword({
       email: trimmedEmail,
       password,
     });
     setBusy(false);
     if (error) {
-      console.error("[login] error", error);
       return toast.error(error.message || "Login failed");
     }
-    console.log("[login] success", { userId: data.user?.id });
+    trackEvent("login_completed", { method: "email", next: from });
     toast.success("Signed in");
     navigate(from, { replace: true });
   };
 
   const handleGoogle = async () => {
+    trackEvent("login_started", { method: "google", next: from });
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${window.location.origin}${from}` },

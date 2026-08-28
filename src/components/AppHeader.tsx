@@ -15,6 +15,7 @@ import { isGrowthPlanIdentifier } from "@/lib/plans";
 import logoMedia from "@/assets/brand/logo-media-blue.png";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
+import { Menu } from "lucide-react";
 
 type AppHeaderProps = {
   active?: "search" | "database" | "monitor";
@@ -70,6 +71,23 @@ export default function AppHeader({ active, rightExtras, hideNav }: AppHeaderPro
         <NavLink to="/search" className="flex items-center">
           <img src={logoMedia} alt="Media AI" className="h-5" />
         </NavLink>
+        {hideNav && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className="md:hidden rounded-md p-2 text-gray-700 hover:bg-gray-100" aria-label="Open navigation">
+                <Menu className="h-5 w-5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-52">
+              <DropdownMenuItem onSelect={() => navigate("/search")}>Search</DropdownMenuItem>
+              {hasGrowth && <DropdownMenuItem onSelect={() => navigate("/database")}>Database</DropdownMenuItem>}
+              <DropdownMenuItem onSelect={() => navigate("/monitor")}>Monitor</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => navigate("/team")}>Team</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => navigate("/account")}>Settings</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
         {!hideNav && (
           <div className="flex items-center gap-1 sm:gap-2">
             <PillNavButton to="/search" dataTour="nav-search">Search</PillNavButton>

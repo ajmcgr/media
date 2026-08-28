@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Check } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { startCheckout, startTopup, TOPUP_PACKS, type TopupPack } from "@/lib/billing";
 import { toast } from "sonner";
+import { trackEvent } from "@/lib/analytics";
 
 type PlanId = "starter" | "growth" | "enterprise";
 type Interval = "monthly" | "yearly";
@@ -87,6 +88,8 @@ const Pricing = () => {
   const [interval, setInterval] = useState<Interval>("monthly");
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const resumedCheckout = useRef(false);
   const [pendingPlan, setPendingPlan] = useState<PlanId | null>(null);
   const [pendingPack, setPendingPack] = useState<TopupPack | null>(null);
 
@@ -95,13 +98,16 @@ const Pricing = () => {
       navigate("/request-demo");
       return;
     }
-    const next = encodeURIComponent(`/pricing?plan=${plan}`);
+    const nextPath = `/pricing?plan=${plan}&interval=${interval}&checkout=1`;
+    const next = encodeURIComponent(nextPath);
     if (!user) {
-      navigate(`/login?next=${next}`);
+      trackEvent("plan_selected", { plan, interval, source: "pricing", authenticated: false });
+      navigate(`/signup?next=${next}`);
       return;
     }
     try {
       setPendingPlan(plan);
+      trackEvent("checkout_started", { plan, interval, source: "pricing" });
       await startCheckout(plan, interval);
     } catch (e) {
       const msg = (e as Error).message;
@@ -114,6 +120,21 @@ const Pricing = () => {
       setPendingPlan(null);
     }
   };
+
+  useEffect(() => {
+    if (authLoading || !user || resumedCheckout.current || searchParams.get("checkout") !== "1") return;
+    const plan = searchParams.get("plan");
+    if (plan !== "starter" && plan !== "growth") return;
+    const requestedInterval = searchParams.get("interval") === "yearly" ? "yearly" : "monthly";
+    resumedCheckout.current = true;
+    setInterval(requestedInterval);
+    setPendingPlan(plan);
+    trackEvent("checkout_resumed", { plan, interval: requestedInterval, source: "post_auth" });
+    startCheckout(plan, requestedInterval).catch((error) => {
+      setPendingPlan(null);
+      toast.error((error as Error).message || "Could not start checkout");
+    });
+  }, [authLoading, searchParams, user]);
 
   const handleTopup = async (pack: TopupPack) => {
     if (!user) {

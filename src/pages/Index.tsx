@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { startCheckout } from "@/lib/billing";
 import { toast } from "sonner";
+import { trackEvent } from "@/lib/analytics";
 
 import heroProductMain from "@/assets/home/hero-product-main.png";
 import heroProductDiscover from "@/assets/home/feature-database.jpg";
@@ -347,11 +348,14 @@ const Index = () => {
       return;
     }
     if (!user) {
-      navigate(`/signup?next=${encodeURIComponent(`/pricing?plan=${plan}`)}`);
+      const next = `/pricing?plan=${plan}&interval=${interval}&checkout=1`;
+      trackEvent("plan_selected", { plan, interval, source: "homepage", authenticated: false });
+      navigate(`/signup?next=${encodeURIComponent(next)}`);
       return;
     }
     try {
       setPendingPlan(plan);
+      trackEvent("checkout_started", { plan, interval, source: "homepage" });
       await startCheckout(plan, interval);
     } catch (e) {
       toast.error((e as Error).message ?? "Could not start checkout");
@@ -359,7 +363,10 @@ const Index = () => {
     }
   };
 
-  const startTrial = () => (user ? navigate("/pricing") : navigate("/signup"));
+  const startTrial = () => {
+    trackEvent("trial_cta_clicked", { source: "homepage", authenticated: Boolean(user) });
+    navigate(user ? "/pricing" : `/signup?next=${encodeURIComponent("/pricing")}`);
+  };
 
   const PrimaryCTA = ({ className = "" }: { className?: string }) => (
     <Button
@@ -852,8 +859,8 @@ const Index = () => {
           </div>
         </div>
         <p className="text-xs text-muted-foreground text-center mt-12">
-          Copyright © {new Date().getFullYear()} Works App, Inc. Built with 🫶🏻 by{" "}
-          <a href="https://works.xyz" target="_blank" rel="noopener noreferrer" className="hover:text-foreground">Works</a>.
+                Copyright © {new Date().getFullYear()} Works App, Inc. Built with 🫶🏻 by{" "}
+                <a href="http://x.com/alexmacgregor__/" target="_blank" rel="noopener noreferrer" className="hover:text-foreground">Alex</a>.
         </p>
       </footer>
     </div>

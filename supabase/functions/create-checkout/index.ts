@@ -82,6 +82,10 @@ Deno.serve(async (req) => {
       sessionParams.customer = profile.stripe_customer_id;
     } else {
       sessionParams.customer_email = user_email;
+      sessionParams.subscription_data = {
+        ...sessionParams.subscription_data,
+        trial_period_days: 30,
+      };
     }
 
     const session = await stripe.checkout.sessions.create(sessionParams);

@@ -30,6 +30,7 @@ import {
   type MonitorUpdate,
 } from "@/hooks/useMonitor";
 import { toast } from "sonner";
+import { trackEvent } from "@/lib/analytics";
 import { InboxSheet } from "@/components/dashboard/InboxSheet";
 import { ListsSheet } from "@/components/dashboard/ListsSheet";
 import AppHeader from "@/components/AppHeader";
@@ -121,7 +122,7 @@ const Monitor = () => {
     return map;
   }, [monitors.data]);
 
-  const allUpdates = updates.data ?? [];
+  const allUpdates = useMemo(() => updates.data ?? [], [updates.data]);
 
   const cutoff = useMemo(() => Date.now() - range * 24 * 60 * 60 * 1000, [range]);
   const inRange = useMemo(
@@ -132,7 +133,7 @@ const Monitor = () => {
   const stats = useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const todayMs = today.getTime();
-    let total = inRange.length;
+    const total = inRange.length;
     let mentionsToday = 0, competitor = 0, positive = 0, negative = 0;
     for (const u of inRange) {
       const ts = new Date(u.published_at ?? u.detected_at).getTime();
@@ -205,6 +206,7 @@ const Monitor = () => {
         toast.success("Monitor updated");
       } else {
         await createMon.mutateAsync(payload);
+        trackEvent("monitor_created", { frequency: payload.alert_frequency });
         toast.success("Keyword monitor added");
       }
       setOpen(false);

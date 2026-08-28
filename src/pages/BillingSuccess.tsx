@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Helmet } from "react-helmet-async";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Header from "@/components/Header";
@@ -6,17 +6,23 @@ import { Button } from "@/components/ui/button";
 import { useSubscription } from "@/hooks/useSubscription";
 import { CheckCircle2 } from "lucide-react";
 import { confirmCheckout } from "@/lib/billing";
+import { trackEvent } from "@/lib/analytics";
 
 const BillingSuccess = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const sessionId = searchParams.get("session_id");
   const sub = useSubscription();
+  const confirmedSession = useRef<string | null>(null);
 
   useEffect(() => {
-    if (sessionId) {
+    if (sessionId && confirmedSession.current !== sessionId) {
+      confirmedSession.current = sessionId;
       confirmCheckout(sessionId)
-        .then(() => sub.refresh())
+        .then(() => {
+          trackEvent("purchase", { transaction_id: sessionId, plan: sub.planIdentifier || "unknown" });
+          return sub.refresh();
+        })
         .catch((error) => console.error("confirm-checkout failed", error));
     }
 

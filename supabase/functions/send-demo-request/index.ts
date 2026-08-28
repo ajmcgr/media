@@ -61,14 +61,6 @@ interface DemoRequest {
   message?: string;
 }
 
-const escapeHtml = (s: string) =>
-  s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-
 const validate = (body: any): { ok: true; data: DemoRequest } | { ok: false; error: string } => {
   if (!body || typeof body !== "object") return { ok: false, error: "Invalid body" };
   const required = ["name", "email", "company"] as const;
@@ -102,7 +94,7 @@ Deno.serve(async (req) => {
 
     const reqBody = await req.json().catch(() => null);
     const parsed = validate(reqBody);
-    if (!parsed.ok) {
+    if (parsed.ok === false) {
       return new Response(JSON.stringify({ error: parsed.error }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

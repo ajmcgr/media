@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import { toast } from "@/hooks/use-toast";
 import { ShareListDialog } from "./ShareListDialog";
+import { trackEvent } from "@/lib/analytics";
 
 type ListsSheetProps = {
   triggerNode?: ReactNode;
@@ -38,6 +39,7 @@ export const ListsSheet = ({ triggerNode, triggerClassName, triggerChildren }: L
     if (!name) return;
     try {
       const list = await createList.mutateAsync(name);
+      trackEvent("list_created", { source: "lists_sheet" });
       setNewName("");
       setActiveId(list.id);
     } catch (e) {

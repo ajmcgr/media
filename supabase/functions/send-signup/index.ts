@@ -54,7 +54,12 @@ const corsHeaders = {
 };
 
 const FROM_ADDRESS = "Media <hello@trymedia.ai>";
-const CONFIRM_REDIRECT_URL = "https://trymedia.ai/chat";
+const CONFIRM_REDIRECT_URL = "https://trymedia.ai/auth/confirm";
+
+function safeNext(value: unknown): string {
+  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) return "/search";
+  return value;
+}
 
 Deno.serve(async (req) => {
   console.log("send-signup invoked", req.method, new Date().toISOString());
@@ -63,7 +68,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { email, password, displayName, company } = await req.json();
+    const { email, password, displayName, company, next: requestedNext } = await req.json();
+    const next = safeNext(requestedNext);
 
     if (!email || typeof email !== "string") {
       return response({ error: "email is required" }, 400);
@@ -116,7 +122,7 @@ Deno.serve(async (req) => {
       return response({ error: message }, status);
     }
 
-    const actionLink = `https://trymedia.ai/auth/confirm?token_hash=${encodeURIComponent(tokenHash)}&type=signup&next=%2Fchat`;
+    const actionLink = `https://trymedia.ai/auth/confirm?token_hash=${encodeURIComponent(tokenHash)}&type=signup&next=${encodeURIComponent(next)}`;
     const firstName = typeof displayName === "string" && displayName.trim() ? displayName.trim().split(/\s+/)[0] : "";
 
     const html = renderBrandedEmail({

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import Header from "@/components/Header";
 import GoogleIcon from "@/components/GoogleIcon";
+import { trackEvent } from "@/lib/analytics";
 
 const APP_URL = "https://trymedia.ai";
 
@@ -18,15 +19,21 @@ const Signup = () => {
   const [company, setCompany] = useState("");
   const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
+  const requestedNext = searchParams.get("next");
+  const next = requestedNext?.startsWith("/") && !requestedNext.startsWith("//")
+    ? requestedNext
+    : "/search";
 
   useEffect(() => {
-    if (user) navigate("/search", { replace: true });
-  }, [user, navigate]);
+    if (user) navigate(next, { replace: true });
+  }, [user, navigate, next]);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
+    trackEvent("sign_up_started", { method: "email", next });
 
     const trimmedEmail = email.trim().toLowerCase();
 
@@ -36,7 +43,7 @@ const Signup = () => {
         password,
         displayName,
         company,
-        redirectTo: `${APP_URL}/search`,
+        next,
       },
     });
 
@@ -62,14 +69,16 @@ const Signup = () => {
     }
 
     toast.success("Check your email to confirm your account");
-    navigate("/login");
+    trackEvent("sign_up_submitted", { method: "email", next });
+    navigate(`/login?next=${encodeURIComponent(next)}`);
   };
 
   const handleGoogle = async () => {
+    trackEvent("sign_up_started", { method: "google", next });
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${APP_URL}/search`,
+        redirectTo: `${APP_URL}${next}`,
       },
     });
     if (error) toast.error(error.message);

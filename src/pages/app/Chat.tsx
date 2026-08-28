@@ -40,6 +40,7 @@ import { MatchExplanationPopover } from "@/components/search/MatchExplanation";
 import { useSubscription } from "@/hooks/useSubscription";
 import { isGrowthPlanIdentifier } from "@/lib/plans";
 import { cn } from "@/lib/utils";
+import { trackEvent } from "@/lib/analytics";
 
 type Msg = { role: "user" | "assistant"; content: string; ts?: string };
 
@@ -571,7 +572,9 @@ const Chat = () => {
     return localStorage.getItem("chat.sidebarCollapsed") === "1";
   });
   useEffect(() => {
-    try { localStorage.setItem("chat.sidebarCollapsed", sidebarCollapsed ? "1" : "0"); } catch {}
+    try { localStorage.setItem("chat.sidebarCollapsed", sidebarCollapsed ? "1" : "0"); } catch {
+      // Sidebar state persistence is optional.
+    }
   }, [sidebarCollapsed]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
@@ -632,8 +635,11 @@ const Chat = () => {
     const feedbackKey = `${lastQuery}:${rowKey}`;
     const previous = relevanceFeedback[feedbackKey];
     setRelevanceFeedback((current) => ({ ...current, [feedbackKey]: feedback }));
+    trackEvent("search_result_feedback", { feedback, result_source: row.source || "unknown" });
 
     void (async () => {
+      // The generated Supabase type file can lag this recently-added feedback table.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (supabase as any)
         .from("search_result_feedback")
         .upsert(
@@ -883,6 +889,11 @@ const Chat = () => {
     setLoading(true);
     setLastQuery(inputValue);
     markFirstSearchComplete();
+    trackEvent("search_submitted", {
+      query_length: inputValue.trim().length,
+      is_new_search: reset,
+      plan: planIdentifier || "unknown",
+    });
 
     // Ensure thread exists; create lazily on first message and reflect in URL.
     if (!activeThreadIdRef.current && user) {
@@ -947,6 +958,12 @@ const Chat = () => {
       if (data?.results) {
         const expanded = await expandChatResults(data.results, inputValue);
         setResults({ ...expanded, pagination: data?.pagination ?? null, sources: data?.sources ?? null });
+        trackEvent("search_results_viewed", {
+          result_count: expanded.rows.length,
+          result_type: expanded.kind,
+          database_results: Number(data?.sources?.database ?? 0),
+          web_results: Number(data?.sources?.web ?? 0),
+        });
         setSavingIdx({});
         upsertSearch.mutate({ tab: expanded.kind, query: { q: inputValue } });
       } else {
@@ -1143,7 +1160,7 @@ const Chat = () => {
 
       <div className="flex flex-1 min-h-0">
         {/* Primary rail */}
-        <aside className={cn("border-r border-border bg-white flex flex-col flex-shrink-0 transition-[width] duration-200", sidebarCollapsed ? "w-14" : "w-52")}>
+        <aside className={cn("hidden md:flex border-r border-border bg-white flex-col flex-shrink-0 transition-[width] duration-200", sidebarCollapsed ? "w-14" : "w-52")}>
           <div className={cn("py-3", sidebarCollapsed ? "px-2 flex justify-center" : "px-2")}>
             <button
               type="button"
@@ -1410,7 +1427,7 @@ const Chat = () => {
           </aside>
         )}
 
-        <section className={`flex flex-col min-h-0 ${results ? "w-[440px] border-r border-border" : "flex-1 items-center"}`}>
+        <section className={`flex-col min-h-0 ${results ? "hidden md:flex md:w-[440px] border-r border-border" : "flex flex-1 items-center"}`}>
           <div ref={scrollRef} className={`flex-1 overflow-auto w-full ${results ? "px-4 py-6" : "max-w-2xl px-6 py-12"}`}>
             {messages.length === 0 ? (
               <div className="mt-12">

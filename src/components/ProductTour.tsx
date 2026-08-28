@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { useSubscription } from "@/hooks/useSubscription";
-import { isGrowthPlanIdentifier } from "@/lib/plans";
 import { Button } from "@/components/ui/button";
 import { Sparkles, X, ArrowRight } from "lucide-react";
 
@@ -23,7 +21,7 @@ const BASE_STEPS: Step[] = [
   {
     id: "welcome",
     title: "Welcome to Media AI",
-    body: "Take a 60-second tour of what's new — sidebar nav, workspaces, notifications, and more.",
+    body: "Run one guided search to see how Media AI finds relevant journalists and creators.",
     route: "/search",
   },
   {
@@ -34,87 +32,9 @@ const BASE_STEPS: Step[] = [
     target: "search-input",
   },
   {
-    id: "nav-search",
-    title: "Sidebar navigation",
-    body: "All your tools now live in a collapsible left sidebar. Search is your home base — every conversation is saved here.",
-    route: "/search",
-    target: "nav-search",
-  },
-  {
-    id: "nav-database",
-    title: "Browse the full database",
-    body: "Filter 1M+ journalists and creators by beat, outlet, country, language and authority.",
-    route: "/search",
-    target: "nav-database",
-    requireGrowth: true,
-  },
-  {
-    id: "nav-monitor",
-    title: "Monitor coverage 24/7",
-    body: "Track keywords across news, blogs and podcasts. Get alerted the moment your brand is mentioned.",
-    route: "/search",
-    target: "nav-monitor",
-  },
-  {
-    id: "nav-inbox",
-    title: "Pitch from your inbox",
-    body: "Connect Gmail or Outlook to send and reply to pitches without leaving Media AI.",
-    route: "/search",
-    target: "nav-inbox",
-  },
-  {
-    id: "nav-lists",
-    title: "Save contacts to lists",
-    body: "Build outreach lists, share them with your team, and export to CSV or your CRM.",
-    route: "/search",
-    target: "nav-lists",
-  },
-  {
-    id: "nav-export",
-    title: "One-click CSV export",
-    body: "Export any result set to CSV. You'll get a confirmation in the notifications panel when it's ready.",
-    route: "/search",
-    target: "nav-export",
-  },
-  {
-    id: "sidebar-collapse",
-    title: "Collapse the sidebar",
-    body: "Click Collapse to shrink the sidebar to icons only — more room for results when you need it.",
-    route: "/search",
-    target: "sidebar-collapse",
-  },
-  {
-    id: "buy-credits",
-    title: "Credits, settings & help",
-    body: "Top up search credits, tweak your settings, or reach support — all from the bottom of the sidebar.",
-    route: "/search",
-    target: "buy-credits",
-  },
-  {
-    id: "workspace-dropdown",
-    title: "Workspaces",
-    body: "Switch between workspaces or spin up a new one to keep client work separate. Invite teammates from Manage team.",
-    route: "/search",
-    target: "workspace-dropdown",
-  },
-  {
-    id: "notifications-bell",
-    title: "Notifications",
-    body: "New — get in-app alerts when exports finish, monitors trigger, or lists are shared with you.",
-    route: "/search",
-    target: "notifications-bell",
-  },
-  {
-    id: "account",
-    title: "Account & billing",
-    body: "Manage your plan, invite teammates, and replay this tour anytime from the account menu.",
-    route: "/search",
-    target: "account-menu",
-  },
-  {
     id: "done",
     title: "You're all set",
-    body: "Jump back into Search and run your first query. You can replay this tour anytime from Account.",
+    body: "Describe who you need, review the ranked matches, then save the strongest contacts to a list.",
     route: "/search",
   },
 ];
@@ -129,15 +49,10 @@ function getTargetRect(selector?: string): DOMRect | null {
 
 export default function ProductTour() {
   const { user, loading: authLoading } = useAuth();
-  const { planIdentifier, loading: subLoading } = useSubscription();
-  const hasGrowth = isGrowthPlanIdentifier(planIdentifier);
   const navigate = useNavigate();
   const location = useLocation();
 
-  const steps = useMemo(
-    () => BASE_STEPS.filter((s) => !s.requireGrowth || hasGrowth),
-    [hasGrowth],
-  );
+  const steps = BASE_STEPS;
 
   const [open, setOpen] = useState(false);
   const [stepIdx, setStepIdx] = useState(0);
@@ -146,7 +61,7 @@ export default function ProductTour() {
 
   // Auto-start once per user
   useEffect(() => {
-    if (authLoading || subLoading) return;
+    if (authLoading) return;
     if (!user) return;
     try {
       const seen = localStorage.getItem(STORAGE_KEY);
@@ -157,9 +72,11 @@ export default function ProductTour() {
           setOpen(true);
         }
       }
-    } catch {}
+    } catch {
+      // Storage can be unavailable in privacy-restricted browsers.
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, authLoading, subLoading]);
+  }, [user, authLoading]);
 
   // Manual replay via event
   useEffect(() => {
@@ -213,7 +130,9 @@ export default function ProductTour() {
   const finish = useCallback(() => {
     try {
       localStorage.setItem(STORAGE_KEY, "1");
-    } catch {}
+    } catch {
+      // Closing the tour should still work when storage is unavailable.
+    }
     setOpen(false);
   }, []);
 

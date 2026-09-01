@@ -777,7 +777,21 @@ const Chat = () => {
     if (topup === "success") {
       (async () => {
         try {
-          await confirmTopup(sessionId);
+          const result = await confirmTopup(sessionId);
+          if (result.ok && result.amountTotal > 0 && sessionId) {
+            const paidValue = result.amountTotal / 100;
+            trackEvent("purchase", {
+              transaction_id: sessionId,
+              currency: result.currency.toUpperCase(),
+              value: paidValue,
+              items: [{
+                item_id: `topup_${result.pack || "credits"}`,
+                item_name: "Media AI search credits",
+                price: paidValue,
+                quantity: 1,
+              }],
+            });
+          }
           toast.success("Credits added to your account");
         } catch (e) {
           console.error("confirm top-up failed", e);

@@ -1,5 +1,5 @@
 // One-time Stripe Checkout for token top-up packs + synchronous confirmation.
-// Checkout body: { user_id, user_email, pack: "small"|"medium"|"large" }
+// Checkout body: { pack: "small"|"medium"|"large" }
 // Confirm body:  { action: "confirm", session_id?: string, user_id?: string, user_email?: string }
 // Uses inline price_data — no Stripe dashboard setup required.
 
@@ -47,23 +47,20 @@ Deno.serve(async (req) => {
     }
 
     const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
-    let authUser: { id: string; email?: string } | null = null;
-    if (token) {
-      const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-      const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      if (SUPABASE_URL && SERVICE_KEY) {
-        const admin = createClient(SUPABASE_URL, SERVICE_KEY);
-        const { data: authData } = await admin.auth.getUser(token);
-        authUser = authData.user ? { id: authData.user.id, email: authData.user.email ?? undefined } : null;
-      }
+    if (!token) return json({ error: "missing_auth" }, 401);
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+    const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+    const { data: authData, error: authError } = await admin.auth.getUser(token);
+    if (authError || !authData.user?.id || !authData.user.email) {
+      return json({ error: "invalid_auth" }, 401);
     }
 
-    const user_id = String(body.user_id ?? authUser?.id ?? "").trim();
-    const user_email = String(body.user_email ?? authUser?.email ?? "").trim();
+    const user_id = authData.user.id;
+    const user_email = authData.user.email.trim().toLowerCase();
     const packKey = String(body.pack ?? "").toLowerCase().trim() as Pack;
     const pack = PACKS[packKey];
 
-    if (!user_id || !user_email) return json({ error: "missing_user" }, 400);
     if (!pack) return json({ error: "invalid_pack", receivedPack: packKey }, 400);
 
     const siteUrl = siteOrigin(req);
@@ -85,8 +82,8 @@ Deno.serve(async (req) => {
         pack: packKey,
         tokens: String(pack.tokens),
       },
-      success_url: `${siteUrl}/chat?topup=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${siteUrl}/chat?topup=cancelled`,
+      success_url: `${siteUrl}/search?topup=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${siteUrl}/search?topup=cancelled`,
     });
 
     return json({ url: session.url });

@@ -116,6 +116,7 @@ const AuthConfirm = () => {
       }
 
       trackEvent("sign_up_completed", { method: "email", next });
+      trackEvent("sign_up", { method: "email" });
       navigate(next, { replace: true });
     });
   }, [location.search, navigate]);

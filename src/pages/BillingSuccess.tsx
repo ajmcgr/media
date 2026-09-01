@@ -5,7 +5,7 @@ import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { useSubscription } from "@/hooks/useSubscription";
 import { CheckCircle2 } from "lucide-react";
-import { confirmCheckout } from "@/lib/billing";
+import { confirmCheckout, getPlanPrice, type BillingInterval, type PlanId } from "@/lib/billing";
 import { trackEvent } from "@/lib/analytics";
 
 const BillingSuccess = () => {
@@ -19,8 +19,28 @@ const BillingSuccess = () => {
     if (sessionId && confirmedSession.current !== sessionId) {
       confirmedSession.current = sessionId;
       confirmCheckout(sessionId)
-        .then(() => {
-          trackEvent("purchase", { transaction_id: sessionId, plan: sub.planIdentifier || "unknown" });
+        .then((result) => {
+          if (!result.ok) throw new Error("Checkout could not be confirmed.");
+          const plan = (result.plan || sub.planIdentifier) as PlanId | undefined;
+          const interval = (result.interval || "monthly") as BillingInterval;
+          const expectedValue = plan ? getPlanPrice(plan, interval) : 0;
+          const item = plan
+            ? [{ item_id: plan, item_name: `Media AI ${plan}`, price: expectedValue, quantity: 1 }]
+            : [];
+
+          if (result.amountTotal > 0) {
+            const paidValue = result.amountTotal / 100;
+            trackEvent("purchase", {
+              transaction_id: sessionId,
+              currency: result.currency.toUpperCase(),
+              value: paidValue,
+              items: plan
+                ? [{ item_id: plan, item_name: `Media AI ${plan}`, price: paidValue, quantity: 1 }]
+                : [],
+            });
+          } else {
+            trackEvent("trial_started", { plan: plan || "unknown", interval, value: expectedValue });
+          }
           return sub.refresh();
         })
         .catch((error) => console.error("confirm-checkout failed", error));

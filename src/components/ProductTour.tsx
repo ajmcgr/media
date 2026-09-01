@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Sparkles, X, ArrowRight } from "lucide-react";
 
@@ -48,7 +47,6 @@ function getTargetRect(selector?: string): DOMRect | null {
 }
 
 export default function ProductTour() {
-  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -58,25 +56,6 @@ export default function ProductTour() {
   const [stepIdx, setStepIdx] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [tick, setTick] = useState(0);
-
-  // Auto-start once per user
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user) return;
-    try {
-      const seen = localStorage.getItem(STORAGE_KEY);
-      if (!seen) {
-        // Only auto-start on app routes
-        if (/^\/(search|chat|database|monitor|account)/.test(location.pathname)) {
-          setStepIdx(0);
-          setOpen(true);
-        }
-      }
-    } catch {
-      // Storage can be unavailable in privacy-restricted browsers.
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, authLoading]);
 
   // Manual replay via event
   useEffect(() => {

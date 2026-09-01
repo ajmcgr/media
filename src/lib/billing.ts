@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { trackEvent } from "@/lib/analytics";
 
 export type PlanId = "starter" | "growth";
 export type BillingInterval = "monthly" | "yearly";
@@ -10,6 +11,15 @@ export const TOPUP_PACKS: Record<TopupPack, { tokens: number; priceUsd: number; 
   large: { tokens: 2_000_000, priceUsd: 120, label: "2M credits" },
 };
 
+export const PLAN_PRICES: Record<PlanId, Record<BillingInterval, number>> = {
+  starter: { monthly: 29, yearly: 290 },
+  growth: { monthly: 99, yearly: 990 },
+};
+
+export function getPlanPrice(plan: PlanId, interval: BillingInterval) {
+  return PLAN_PRICES[plan][interval];
+}
+
 type InvokeResponse = {
   url?: string;
   ok?: boolean;
@@ -17,6 +27,11 @@ type InvokeResponse = {
   tokens?: number;
   granted?: number;
   already?: boolean;
+  plan_identifier?: PlanId;
+  interval?: BillingInterval;
+  amount_total?: number;
+  currency?: string;
+  pack?: TopupPack;
 };
 
 async function authedInvoke(path: string, body: unknown) {
@@ -51,12 +66,7 @@ export async function startCheckout(plan: PlanId, interval: BillingInterval = "m
     data: { session },
   } = await supabase.auth.getSession();
   if (!session?.user?.id || !session.user.email) throw new Error("NOT_AUTHENTICATED");
-  const payload = {
-    user_id: session.user.id,
-    user_email: session.user.email,
-    plan_identifier: plan.toLowerCase() as PlanId,
-    interval,
-  };
+  const payload = { plan_identifier: plan.toLowerCase() as PlanId, interval };
   const { url } = await authedInvoke("create-checkout", payload);
   if (!url) throw new Error("Checkout URL missing.");
   window.location.href = url;
@@ -64,7 +74,13 @@ export async function startCheckout(plan: PlanId, interval: BillingInterval = "m
 
 export async function confirmCheckout(sessionId: string) {
   const data = await authedInvoke("confirm-checkout", { session_id: sessionId });
-  return { ok: Boolean(data.ok) };
+  return {
+    ok: Boolean(data.ok),
+    plan: data.plan_identifier,
+    interval: data.interval,
+    amountTotal: Number(data.amount_total ?? 0),
+    currency: data.currency ?? "usd",
+  };
 }
 
 export async function confirmTopup(sessionId: string | null) {
@@ -76,7 +92,7 @@ export async function confirmTopup(sessionId: string | null) {
   // Confirm only through dedicated endpoint.
   // If session_id is missing, don't hard-fail UI; webhook can still grant credits.
   if (!sessionId) {
-    return { ok: true, tokens: 0, already: true };
+    return { ok: true, tokens: 0, already: true, amountTotal: 0, currency: "usd", pack: undefined };
   }
 
   const data = await authedInvoke("confirm-topup", { session_id: sessionId });
@@ -85,6 +101,9 @@ export async function confirmTopup(sessionId: string | null) {
     ok: Boolean(data.ok),
     tokens: Number(data.tokens ?? data.granted ?? 0),
     already: Boolean(data.already),
+    amountTotal: Number(data.amount_total ?? 0),
+    currency: data.currency ?? "usd",
+    pack: data.pack,
   };
 }
 
@@ -98,11 +117,13 @@ export async function startTopup(pack: TopupPack) {
     data: { session },
   } = await supabase.auth.getSession();
   if (!session?.user?.id || !session.user.email) throw new Error("NOT_AUTHENTICATED");
-  const { url } = await authedInvoke("create-topup", {
-    user_id: session.user.id,
-    user_email: session.user.email,
-    pack,
+  const selectedPack = TOPUP_PACKS[pack];
+  trackEvent("begin_checkout", {
+    currency: "USD",
+    value: selectedPack.priceUsd,
+    items: [{ item_id: `topup_${pack}`, item_name: selectedPack.label, price: selectedPack.priceUsd, quantity: 1 }],
   });
+  const { url } = await authedInvoke("create-topup", { pack });
   if (!url) throw new Error("Checkout URL missing.");
   window.location.href = url;
 }

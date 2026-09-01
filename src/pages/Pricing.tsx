@@ -6,7 +6,7 @@ import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { startCheckout, startTopup, TOPUP_PACKS, type TopupPack } from "@/lib/billing";
+import { getPlanPrice, startCheckout, startTopup, TOPUP_PACKS, type TopupPack } from "@/lib/billing";
 import { toast } from "sonner";
 import { trackEvent } from "@/lib/analytics";
 
@@ -35,7 +35,7 @@ const TIERS: Tier[] = [
     cta: "Start Free Trial",
     features: [
       "~500 AI searches / month",
-      "Verified journalist and creator contact emails",
+      "Verified contact emails where available, plus on-demand enrichment",
       "Capped at 100 media contacts per query",
       "Top-up credits any time",
       "Email support",
@@ -53,7 +53,7 @@ const TIERS: Tier[] = [
     cta: "Start Free Trial",
     features: [
       "~3,000 AI searches / month",
-      "Verified journalist and creator contact emails",
+      "Verified contact emails where available, plus on-demand enrichment",
       "Unlimited media contacts per query",
       "Top-up credits any time",
       "100% database access — no row limits",
@@ -74,7 +74,7 @@ const TIERS: Tier[] = [
     yearly: null,
     cta: "Contact us",
     features: [
-      "Verified journalist and creator contact emails",
+      "Verified contact emails where available, plus on-demand enrichment",
       "Everything in Growth",
       "Custom API access",
       "Volume credit pricing",
@@ -108,6 +108,12 @@ const Pricing = () => {
     try {
       setPendingPlan(plan);
       trackEvent("checkout_started", { plan, interval, source: "pricing" });
+      const value = getPlanPrice(plan, interval);
+      trackEvent("begin_checkout", {
+        currency: "USD",
+        value,
+        items: [{ item_id: plan, item_name: `Media AI ${plan}`, price: value, quantity: 1 }],
+      });
       await startCheckout(plan, interval);
     } catch (e) {
       const msg = (e as Error).message;
@@ -130,6 +136,12 @@ const Pricing = () => {
     setInterval(requestedInterval);
     setPendingPlan(plan);
     trackEvent("checkout_resumed", { plan, interval: requestedInterval, source: "post_auth" });
+    const value = getPlanPrice(plan, requestedInterval);
+    trackEvent("begin_checkout", {
+      currency: "USD",
+      value,
+      items: [{ item_id: plan, item_name: `Media AI ${plan}`, price: value, quantity: 1 }],
+    });
     startCheckout(plan, requestedInterval).catch((error) => {
       setPendingPlan(null);
       toast.error((error as Error).message || "Could not start checkout");

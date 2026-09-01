@@ -14,7 +14,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { isGrowthPlanIdentifier } from "@/lib/plans";
 import logoMedia from "@/assets/brand/logo-media-blue.png";
 import { cn } from "@/lib/utils";
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { Menu } from "lucide-react";
 
 type AppHeaderProps = {
@@ -59,6 +59,8 @@ export default function AppHeader({ active, rightExtras, hideNav }: AppHeaderPro
   const { planIdentifier } = useSubscription();
   const hasGrowth = isGrowthPlanIdentifier(planIdentifier);
   const initials = (user?.email ?? "?").slice(0, 2).toUpperCase();
+  const mobileInboxTrigger = useRef<HTMLButtonElement>(null);
+  const mobileListsTrigger = useRef<HTMLButtonElement>(null);
 
   const handleSignOut = async () => {
     await signOut();
@@ -82,9 +84,19 @@ export default function AppHeader({ active, rightExtras, hideNav }: AppHeaderPro
               <DropdownMenuItem onSelect={() => navigate("/search")}>Search</DropdownMenuItem>
               {hasGrowth && <DropdownMenuItem onSelect={() => navigate("/database")}>Database</DropdownMenuItem>}
               <DropdownMenuItem onSelect={() => navigate("/monitor")}>Monitor</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => window.setTimeout(() => mobileInboxTrigger.current?.click(), 0)}>
+                Inbox
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => window.setTimeout(() => mobileListsTrigger.current?.click(), 0)}>
+                Lists
+              </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => navigate("/team")}>Team</DropdownMenuItem>
               <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => navigate("/account#credits")}>Buy credits</DropdownMenuItem>
               <DropdownMenuItem onSelect={() => navigate("/account")}>Settings</DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <a href="mailto:alex@trymedia.ai">Help</a>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
@@ -131,6 +143,13 @@ export default function AppHeader({ active, rightExtras, hideNav }: AppHeaderPro
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <InboxSheet
+        triggerNode={<button ref={mobileInboxTrigger} type="button" className="hidden" tabIndex={-1} aria-hidden="true" />}
+      />
+      <ListsSheet
+        triggerNode={<button ref={mobileListsTrigger} type="button" className="hidden" tabIndex={-1} aria-hidden="true" />}
+      />
     </header>
   );
 }

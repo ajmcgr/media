@@ -238,14 +238,19 @@ async function upsertSubscription(
   }
 
   // Mirror to profiles so useSubscription (single source of truth) stays in sync
+  const profileUpdate: Record<string, unknown> = {
+    sub_active: isActive,
+    plan_identifier: planIdentifier,
+    sub_period_end: toIso(sub.current_period_end),
+    stripe_customer_id: sub.customer as string,
+  };
+  if (sub.trial_start) {
+    profileUpdate.trial_used_at = toIso(sub.trial_start);
+  }
+
   const { error: profErr } = await admin
     .from("profiles")
-    .update({
-      sub_active: isActive,
-      plan_identifier: planIdentifier,
-      sub_period_end: toIso(sub.current_period_end),
-      stripe_customer_id: sub.customer as string,
-    })
+    .update(profileUpdate)
     .eq("id", userId);
   if (profErr) console.error("profile sync error", profErr);
 }

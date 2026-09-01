@@ -11,7 +11,7 @@ const XLogo = ({ className }: { className?: string }) => (
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { startCheckout } from "@/lib/billing";
+import { getPlanPrice, startCheckout } from "@/lib/billing";
 import { toast } from "sonner";
 import { trackEvent } from "@/lib/analytics";
 
@@ -159,7 +159,7 @@ const TIERS: Tier[] = [
     cta: "Start Free Trial",
     features: [
       "~500 AI searches / month",
-      "Verified journalist and creator contact emails",
+      "Verified contact emails where available, plus on-demand enrichment",
       "Capped at 100 media contacts per query",
       "Top-up credits any time",
       "Email support",
@@ -177,7 +177,7 @@ const TIERS: Tier[] = [
     cta: "Start Free Trial",
     features: [
       "~3,000 AI searches / month",
-      "Verified journalist and creator contact emails",
+      "Verified contact emails where available, plus on-demand enrichment",
       "Unlimited media contacts per query",
       "Top-up credits any time",
       "100% database access — no row limits",
@@ -198,7 +198,7 @@ const TIERS: Tier[] = [
     yearly: null,
     cta: "Contact us",
     features: [
-      "Verified journalist and creator contact emails",
+      "Verified contact emails where available, plus on-demand enrichment",
       "Everything in Growth",
       "Custom API access",
       "Volume credit pricing",
@@ -211,13 +211,13 @@ const TIERS: Tier[] = [
 
 const FAQS = [
   { q: "What is Media AI?", a: "Media AI is an AI-powered database of journalists and creators. PR and social media pros use Search to find the right contacts, save searches, build lists, and monitor brand mentions — all in one place." },
-  { q: "How does AI search work?", a: "Just ask in plain English — e.g. 'I'm looking for a tech journalist in the United Kingdom'. Search queries the database plus live web sources and returns a curated list of journalists or creators with verified emails, beats, outlets, and social handles. You can refine with follow-up questions." },
+  { q: "How does AI search work?", a: "Just ask in plain English — e.g. 'I'm looking for a tech journalist in the United Kingdom'. Search queries the database plus live web sources and returns a curated list of journalists or creators with available contact details, beats, outlets, and social handles. You can refine with follow-up questions." },
   { q: "Can I find creators and influencers, not just journalists?", a: "Yes. The Creators view lets you filter by Instagram followers, engagement rate, YouTube subscribers, category, and country, and Search works across both journalists and creators." },
-  { q: "How many journalists and creators are in the database?", a: "Hundreds of thousands of journalists and creators worldwide, with new contacts added continuously. Our AI crawler keeps contact info fresh and removes outdated records." },
-  { q: "Do you offer verified email addresses?", a: "Yes — every profile includes a verified email along with relevant social handles, outlet, country, topic, and beat info. Use 'Find email' on any row to enrich missing contacts on demand." },
+  { q: "How many journalists and creators are in the database?", a: "Media AI maintains a growing global database of journalists and creators, with new contacts added continuously and records refreshed as public information changes." },
+  { q: "Do you offer verified email addresses?", a: "Many profiles include a verified email alongside available social handles, outlet, country, topic, and beat information. Use 'Find email' on profiles without an address to enrich the contact on demand." },
   { q: "Can I save lists, monitor coverage, and send pitches?", a: "Yes. Save any search, build custom lists, get brand mention alerts in Monitor, connect your inbox to send and track pitches, and export contacts to CSV any time." },
-  { q: "How accurate is the contact data?", a: "Our AI continuously verifies records against public sources, re-checks them frequently, and removes outdated entries as soon as we detect changes." },
-  { q: "Is there a free trial? Can I cancel anytime?", a: "Every paid plan includes a 1-month free trial with full access to the database. You can change or cancel your plan at any time from your account — no contracts, no cancellation fees." },
+  { q: "How accurate is the contact data?", a: "Records are assembled from public sources and refreshed as changes are detected. Contact details can still change, so email enrichment is available when an address is missing." },
+  { q: "Is there a free trial? Can I cancel anytime?", a: "Every paid plan includes a 1-month free trial of the features included in that plan. You can change or cancel your plan at any time from your account — no contracts, no cancellation fees." },
   { q: "Where does the contact data come from?", a: "Our proprietary AI crawler aggregates publicly available information from outlets, bylines, social platforms, and creator profiles across the web." },
 ];
 
@@ -356,6 +356,12 @@ const Index = () => {
     try {
       setPendingPlan(plan);
       trackEvent("checkout_started", { plan, interval, source: "homepage" });
+      const value = getPlanPrice(plan, interval);
+      trackEvent("begin_checkout", {
+        currency: "USD",
+        value,
+        items: [{ item_id: plan, item_name: `Media AI ${plan}`, price: value, quantity: 1 }],
+      });
       await startCheckout(plan, interval);
     } catch (e) {
       toast.error((e as Error).message ?? "Could not start checkout");

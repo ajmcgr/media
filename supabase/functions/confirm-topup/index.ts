@@ -36,7 +36,12 @@ Deno.serve(async (req) => {
     if (session.payment_status !== "paid") return json({ error: "not_paid", status: session.payment_status }, 400);
 
     const sessionUserId = session.metadata?.supabase_user_id;
+    const sessionEmail = (session.customer_details?.email ?? session.customer_email ?? "").toLowerCase();
+    const authEmail = (authData.user.email ?? "").toLowerCase();
     if (sessionUserId && sessionUserId !== authData.user.id) return json({ error: "user_mismatch" }, 403);
+    if (!sessionUserId && (!sessionEmail || !authEmail || sessionEmail !== authEmail)) {
+      return json({ error: "session_email_mismatch" }, 403);
+    }
 
     const userId = sessionUserId || authData.user.id;
     const tokens = Number(session.metadata?.tokens || 0);
@@ -50,7 +55,13 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (existing) {
-      return json({ ok: true, already: true });
+      return json({
+        ok: true,
+        already: true,
+        amount_total: session.amount_total ?? 0,
+        currency: session.currency ?? "usd",
+        pack: session.metadata?.pack,
+      });
     }
 
     // Grant credits
@@ -73,7 +84,13 @@ Deno.serve(async (req) => {
       console.warn("could not mark session granted", e);
     }
 
-    return json({ ok: true, tokens });
+    return json({
+      ok: true,
+      tokens,
+      amount_total: session.amount_total ?? 0,
+      currency: session.currency ?? "usd",
+      pack: session.metadata?.pack,
+    });
   } catch (e) {
     console.error("confirm-topup error", e);
     return json({ error: (e as Error).message }, 500);

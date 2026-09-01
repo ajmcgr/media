@@ -1,5 +1,5 @@
 // create-checkout — Stripe Checkout session for subscription plans.
-// Body: { user_id, user_email, plan_identifier: "starter"|"growth"|..., interval: "monthly"|"yearly" }
+// Body: { plan_identifier: "starter"|"growth"|..., interval: "monthly"|"yearly" }
 // Resolves price_id from public.plans, attaches user_id + plan_identifier metadata
 // to BOTH the session and the subscription so stripe-webhook can link it back.
 
@@ -13,8 +13,6 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-console.log("CHECKOUT_V7_RUNNING - real session 2026-05-04");
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -25,19 +23,24 @@ Deno.serve(async (req) => {
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     if (!STRIPE_SECRET_KEY) return json({ error: "missing_stripe_key" }, 500);
 
+    const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+    if (!token) return json({ error: "missing_auth" }, 401);
+
+    const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+    const { data: authData, error: authError } = await admin.auth.getUser(token);
+    if (authError || !authData.user?.id || !authData.user.email) {
+      return json({ error: "invalid_auth" }, 401);
+    }
+
+    const user_id = authData.user.id;
+    const user_email = authData.user.email.trim().toLowerCase();
     const body = await req.json().catch(() => ({} as Record<string, unknown>));
-    const user_id = String(body.user_id ?? "").trim();
-    const user_email = String(body.user_email ?? "").trim();
     const plan_identifier = String(body.plan_identifier ?? "").toLowerCase().trim();
     const interval = (String(body.interval ?? "monthly").toLowerCase().trim() === "yearly")
       ? "yearly" : "monthly";
 
-    console.log("CHECKOUT_BODY", { user_id, user_email, plan_identifier, interval });
-
-    if (!user_id || !user_email) return json({ error: "missing_user" }, 400);
     if (!plan_identifier) return json({ error: "plan_identifier required" }, 400);
 
-    const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const { data: plan, error: planErr } = await admin
       .from("plans")
       .select("identifier, monthly_price_id, yearly_price_id")
@@ -51,14 +54,44 @@ Deno.serve(async (req) => {
       : plan.monthly_price_id;
     if (!price_id) return json({ error: "price_id_missing_for_plan", plan_identifier, interval }, 400);
 
-    // Reuse existing Stripe customer if we have one
-    const { data: profile } = await admin
+    // Reuse an existing customer and inspect both local and Stripe history before granting a trial.
+    const { data: profile, error: profileError } = await admin
       .from("profiles")
-      .select("stripe_customer_id")
+      .select("stripe_customer_id, trial_used_at")
       .eq("id", user_id)
       .maybeSingle();
+    if (profileError) throw profileError;
+
+    const { data: localSubscription, error: subscriptionHistoryError } = await admin
+      .from("subscriptions")
+      .select("id")
+      .eq("user_id", user_id)
+      .limit(1)
+      .maybeSingle();
+    if (subscriptionHistoryError) throw subscriptionHistoryError;
 
     const stripe = new Stripe(STRIPE_SECRET_KEY);
+    let customerId = profile?.stripe_customer_id ?? null;
+
+    if (!customerId) {
+      const matchingCustomers = await stripe.customers.list({ email: user_email, limit: 10 });
+      customerId = matchingCustomers.data[0]?.id ?? null;
+      if (customerId) {
+        const { error: customerSyncError } = await admin
+          .from("profiles")
+          .update({ stripe_customer_id: customerId })
+          .eq("id", user_id);
+        if (customerSyncError) throw customerSyncError;
+      }
+    }
+
+    let hasStripeSubscriptionHistory = false;
+    if (customerId) {
+      const subscriptions = await stripe.subscriptions.list({ customer: customerId, status: "all", limit: 1 });
+      hasStripeSubscriptionHistory = subscriptions.data.length > 0;
+    }
+
+    const trialEligible = !profile?.trial_used_at && !localSubscription && !hasStripeSubscriptionHistory;
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: "subscription",
       line_items: [{ price: price_id, quantity: 1 }],
@@ -67,21 +100,25 @@ Deno.serve(async (req) => {
         supabase_user_id: user_id,
         plan_identifier,
         interval,
+        trial_granted: String(trialEligible),
       },
       subscription_data: {
         metadata: {
           supabase_user_id: user_id,
           plan_identifier,
           interval,
+          trial_granted: String(trialEligible),
         },
       },
       success_url: `${SITE_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${SITE_URL}/pricing`,
     };
-    if (profile?.stripe_customer_id) {
-      sessionParams.customer = profile.stripe_customer_id;
+    if (customerId) {
+      sessionParams.customer = customerId;
     } else {
       sessionParams.customer_email = user_email;
+    }
+    if (trialEligible) {
       sessionParams.subscription_data = {
         ...sessionParams.subscription_data,
         trial_period_days: 30,

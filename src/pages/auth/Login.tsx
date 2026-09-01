@@ -41,6 +41,7 @@ const Login = () => {
       return toast.error(error.message || "Login failed");
     }
     trackEvent("login_completed", { method: "email", next: from });
+    trackEvent("login", { method: "email" });
     toast.success("Signed in");
     navigate(from, { replace: true });
   };

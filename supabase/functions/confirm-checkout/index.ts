@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
     const sessionEmail = (session.customer_details?.email ?? session.customer_email ?? "").toLowerCase();
     const authEmail = (authData.user.email ?? "").toLowerCase();
     if (sessionUserId && sessionUserId !== authData.user.id) return json({ error: "session_user_mismatch" }, 403);
-    if (!sessionUserId && sessionEmail && authEmail && sessionEmail !== authEmail) {
+    if (!sessionUserId && (!sessionEmail || !authEmail || sessionEmail !== authEmail)) {
       return json({ error: "session_email_mismatch" }, 403);
     }
 
@@ -49,8 +49,20 @@ Deno.serve(async (req) => {
       ? await stripe.subscriptions.retrieve(session.subscription)
       : session.subscription as Stripe.Subscription;
 
-    await upsertSubscription(admin, stripe, sub, authData.user.id, session.metadata?.plan_identifier);
-    return json({ ok: true });
+    const planIdentifier = await upsertSubscription(
+      admin,
+      stripe,
+      sub,
+      authData.user.id,
+      session.metadata?.plan_identifier,
+    );
+    return json({
+      ok: true,
+      plan_identifier: planIdentifier,
+      interval: session.metadata?.interval ?? sub.metadata?.interval ?? "monthly",
+      amount_total: session.amount_total ?? 0,
+      currency: session.currency ?? "usd",
+    });
   } catch (e) {
     console.error("confirm-checkout error", e);
     return json({ error: (e as Error).message }, 500);
@@ -103,16 +115,23 @@ async function upsertSubscription(admin: ReturnType<typeof createClient>, stripe
   }
 
   const isActive = ["active", "trialing", "past_due"].includes(subscriptionForProfile.status);
+  const profileUpdate: Record<string, unknown> = {
+    sub_active: isActive,
+    plan_identifier: subscriptionForProfile.metadata?.plan_identifier || planIdentifier,
+    sub_period_end: toIso(subscriptionForProfile.current_period_end),
+    stripe_customer_id: subscriptionForProfile.customer as string,
+  };
+  if (subscriptionForProfile.trial_start) {
+    profileUpdate.trial_used_at = toIso(subscriptionForProfile.trial_start);
+  }
+
   const { error: profileError } = await admin
     .from("profiles")
-    .update({
-      sub_active: isActive,
-      plan_identifier: subscriptionForProfile.metadata?.plan_identifier || planIdentifier,
-      sub_period_end: toIso(subscriptionForProfile.current_period_end),
-      stripe_customer_id: subscriptionForProfile.customer as string,
-    })
+    .update(profileUpdate)
     .eq("id", userId);
   if (profileError) throw profileError;
+
+  return planIdentifier;
 }
 
 function toIso(unix: number | null | undefined) {

@@ -46,7 +46,6 @@ ${footerNote ? `<tr><td align="center" style="padding:20px 32px 28px;border-top:
 // Keyword Monitor — Google News based mention checker.
 // Triggered manually from the UI or by the daily cron via monitor-run-all.
 import { createClient } from "npm:@supabase/supabase-js@2.45.0";
-import { requireUserOrInternal } from "../_shared/privileged-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -56,6 +55,30 @@ const corsHeaders = {
 };
 
 const APP_URL = "https://trymedia.ai/monitor";
+
+type UserAuthorization =
+  | { caller: { kind: "internal" } | { kind: "user"; userId: string } }
+  | { error: string; status: number };
+
+// Kept local so this function can be deployed directly from the Supabase Dashboard.
+async function requireUserOrInternal(req: Request): Promise<UserAuthorization> {
+  try {
+    const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+    if (!token) return { error: "missing_auth", status: 401 };
+    const url = Deno.env.get("SUPABASE_URL")?.trim();
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim();
+    if (!url || !serviceKey) throw new Error("Supabase authorization configuration missing");
+    if (token === serviceKey) return { caller: { kind: "internal" } };
+
+    const admin = createClient(url, serviceKey);
+    const { data: authData, error: authError } = await admin.auth.getUser(token);
+    if (authError || !authData.user) return { error: "invalid_auth", status: 401 };
+    return { caller: { kind: "user", userId: authData.user.id } };
+  } catch (error) {
+    console.error("user authorization failed", error);
+    return { error: "authorization_unavailable", status: 503 };
+  }
+}
 
 interface Monitor {
   id: string;

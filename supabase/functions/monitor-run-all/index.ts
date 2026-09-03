@@ -46,13 +46,43 @@ ${footerNote ? `<tr><td align="center" style="padding:20px 32px 28px;border-top:
 // Iterate all active monitors and invoke monitor-check for each.
 // Triggered by pg_cron daily. Also sends daily/weekly digest emails.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { requireAdminOrInternal } from "../_shared/privileged-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
+type AdminAuthorization =
+  | { caller: { kind: "internal" } | { kind: "admin"; userId: string } }
+  | { error: string; status: number };
+
+// Kept local so this function can be deployed directly from the Supabase Dashboard.
+async function requireAdminOrInternal(req: Request): Promise<AdminAuthorization> {
+  try {
+    const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+    if (!token) return { error: "missing_auth", status: 401 };
+    const url = Deno.env.get("SUPABASE_URL")?.trim();
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim();
+    if (!url || !serviceKey) throw new Error("Supabase authorization configuration missing");
+    if (token === serviceKey) return { caller: { kind: "internal" } };
+
+    const admin = createClient(url, serviceKey);
+    const { data: authData, error: authError } = await admin.auth.getUser(token);
+    if (authError || !authData.user) return { error: "invalid_auth", status: 401 };
+    const { data: role, error: roleError } = await admin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", authData.user.id)
+      .eq("role", "admin")
+      .maybeSingle();
+    if (roleError || !role) return { error: "forbidden", status: 403 };
+    return { caller: { kind: "admin", userId: authData.user.id } };
+  } catch (error) {
+    console.error("privileged authorization failed", error);
+    return { error: "authorization_unavailable", status: 503 };
+  }
+}
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

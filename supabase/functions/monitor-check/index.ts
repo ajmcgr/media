@@ -46,6 +46,7 @@ ${footerNote ? `<tr><td align="center" style="padding:20px 32px 28px;border-top:
 // Keyword Monitor — Google News based mention checker.
 // Triggered manually from the UI or by the daily cron via monitor-run-all.
 import { createClient } from "npm:@supabase/supabase-js@2.45.0";
+import { requireUserOrInternal } from "../_shared/privileged-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -245,6 +246,9 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return err("method_not_allowed", undefined, 405);
 
   try {
+    const authorization = await requireUserOrInternal(req);
+    if ("error" in authorization) return err(authorization.error, undefined, authorization.status);
+
     const body = await req.json().catch(() => ({}));
     const monitor_id = body?.monitor_id as string | undefined;
     if (!monitor_id) return err("monitor_id required", undefined, 400);
@@ -265,6 +269,9 @@ Deno.serve(async (req) => {
     if (!monitor) return err("monitor_not_found", undefined, 404);
 
     const m = monitor as Monitor;
+    if (authorization.caller.kind === "user" && m.user_id !== authorization.caller.userId) {
+      return err("forbidden", undefined, 403);
+    }
     const { data: userRow } = await supa.auth.admin.getUserById(m.user_id);
     const userEmail = userRow?.user?.email ?? null;
 

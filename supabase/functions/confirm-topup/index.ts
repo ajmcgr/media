@@ -47,33 +47,12 @@ Deno.serve(async (req) => {
     const tokens = Number(session.metadata?.tokens || 0);
     if (!tokens) return json({ error: "missing_tokens" }, 400);
 
-    // Check if already granted in our database to avoid double-granting
-    const { data: existing } = await admin
-      .from("topup_transactions")
-      .select("id")
-      .eq("stripe_session_id", sessionId)
-      .maybeSingle();
-
-    if (existing) {
-      return json({
-        ok: true,
-        already: true,
-        amount_total: session.amount_total ?? 0,
-        currency: session.currency ?? "usd",
-        pack: session.metadata?.pack,
-      });
-    }
-
-    // Grant credits
-    await grantCredits(admin, userId, tokens);
-
-    // Record the transaction
-    const { error: insertError } = await admin.from("topup_transactions").insert({
-      user_id: userId,
-      stripe_session_id: sessionId,
-      tokens: tokens,
+    const { data: granted, error: grantError } = await admin.rpc("grant_topup_credits_once", {
+      _user: userId,
+      _stripe_session_id: sessionId,
+      _tokens: tokens,
     });
-    if (insertError) console.warn("topup transaction insert skipped", insertError);
+    if (grantError) throw grantError;
 
     // Mark session as granted to prevent double-grant if webhook also fires.
     try {
@@ -86,6 +65,7 @@ Deno.serve(async (req) => {
 
     return json({
       ok: true,
+      already: !granted,
       tokens,
       amount_total: session.amount_total ?? 0,
       currency: session.currency ?? "usd",
@@ -102,29 +82,4 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-}
-
-async function grantCredits(
-  admin: ReturnType<typeof createClient>,
-  userId: string,
-  tokens: number,
-) {
-  const { error: rpcError } = await admin.rpc("chat_credit_grant", { _user: userId, _tokens: tokens });
-  if (!rpcError) return;
-
-  console.warn("chat_credit_grant failed, falling back to direct profile update", rpcError);
-  const { data: profile, error: readError } = await admin
-    .from("profiles")
-    .select("chat_credits")
-    .eq("id", userId)
-    .maybeSingle();
-  if (readError) throw new Error(`chat_credit_grant failed: ${rpcError.message}; profile read failed: ${readError.message}`);
-  if (!profile) throw new Error(`chat_credit_grant failed: ${rpcError.message}; profile not found`);
-
-  const nextCredits = Number(profile.chat_credits ?? 0) + tokens;
-  const { error: updateError } = await admin
-    .from("profiles")
-    .update({ chat_credits: nextCredits })
-    .eq("id", userId);
-  if (updateError) throw new Error(`chat_credit_grant failed: ${rpcError.message}; profile update failed: ${updateError.message}`);
 }

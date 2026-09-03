@@ -3,6 +3,7 @@
 // Reuses the OPENAI_API_KEY pattern already used by blog-generate.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { requireAdminOrInternal } from "../_shared/privileged-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -78,6 +79,14 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
+    const authorization = await requireAdminOrInternal(req);
+    if ("error" in authorization) {
+      return new Response(JSON.stringify({ error: authorization.error }), {
+        status: authorization.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const body = await req.json().catch(() => ({}));
     const { topic, source: forcedSource, slug: forcedSlug, publish, auto, count } = body || {};
 

@@ -114,40 +114,13 @@ Deno.serve(async (req) => {
 });
 
 async function grantTopupOnce(sessionId: string, userId: string, tokens: number) {
-  const { data: existing } = await admin
-    .from("topup_transactions")
-    .select("id")
-    .eq("stripe_session_id", sessionId)
-    .maybeSingle();
-  if (existing) return;
-
-  await grantCredits(userId, tokens);
-  const { error: insertError } = await admin.from("topup_transactions").insert({
-    user_id: userId,
-    stripe_session_id: sessionId,
-    tokens,
+  const { data: granted, error } = await admin.rpc("grant_topup_credits_once", {
+    _user: userId,
+    _stripe_session_id: sessionId,
+    _tokens: tokens,
   });
-  if (insertError) console.warn("topup transaction insert skipped", insertError);
-  console.log("granted topup credits", { userId, tokens });
-}
-
-async function grantCredits(userId: string, tokens: number) {
-  const { error: rpcError } = await admin.rpc("chat_credit_grant", { _user: userId, _tokens: tokens });
-  if (!rpcError) return;
-
-  console.warn("chat_credit_grant error; falling back to direct profile update", rpcError);
-  const { data: profile, error: readError } = await admin
-    .from("profiles")
-    .select("chat_credits")
-    .eq("id", userId)
-    .maybeSingle();
-  if (readError || !profile) throw readError ?? new Error("profile not found");
-
-  const { error: updateError } = await admin
-    .from("profiles")
-    .update({ chat_credits: Number(profile.chat_credits ?? 0) + tokens })
-    .eq("id", userId);
-  if (updateError) throw updateError;
+  if (error) throw error;
+  if (granted) console.log("granted topup credits", { userId, tokens });
 }
 
 async function upsertSubscription(

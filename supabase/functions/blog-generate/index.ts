@@ -4,6 +4,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { generateAndStoreBlogImages } from "../_shared/blog-image.ts";
+import { requireAdminOrInternal } from "../_shared/privileged-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -194,6 +195,11 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return jsonResponse({ ok: false, error: "Method not allowed" }, 405);
 
   try {
+    const authorization = await requireAdminOrInternal(req);
+    if ("error" in authorization) {
+      return jsonResponse({ ok: false, error: authorization.error }, authorization.status);
+    }
+
     const body = await req.json().catch(() => ({}));
     const topic = typeof body.topic === "string" && body.topic.trim()
       ? body.topic.trim().slice(0, 140)

@@ -3,6 +3,7 @@
 // server-side because Ahrefs will require API-key authentication from Sep 2026.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { requireAdminOrInternal } from "../_shared/privileged-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -52,6 +53,14 @@ async function ahrefsDR(domain: string, token: string): Promise<AhrefsResult> {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const authorization = await requireAdminOrInternal(req);
+  if ("error" in authorization) {
+    return new Response(JSON.stringify({ error: authorization.error }), {
+      status: authorization.status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

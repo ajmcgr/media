@@ -46,6 +46,7 @@ ${footerNote ? `<tr><td align="center" style="padding:20px 32px 28px;border-top:
 // Iterate all active monitors and invoke monitor-check for each.
 // Triggered by pg_cron daily. Also sends daily/weekly digest emails.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { requireAdminOrInternal } from "../_shared/privileged-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -106,6 +107,14 @@ async function sendDigest(opts: {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
+    const authorization = await requireAdminOrInternal(req);
+    if ("error" in authorization) {
+      return new Response(JSON.stringify({ error: authorization.error }), {
+        status: authorization.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     console.log("MONITOR_SCHEDULED_CHECK_STARTED");
     const supa = createClient(SUPABASE_URL, SERVICE_ROLE);
     const cutoff = new Date(Date.now() - 23 * 60 * 60 * 1000).toISOString();

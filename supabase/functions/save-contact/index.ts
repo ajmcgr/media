@@ -119,6 +119,22 @@ async function findExistingCreator(admin: AdminClient, row: SaveRow): Promise<nu
   return null;
 }
 
+async function isAdmin(admin: AdminClient, userId: string) {
+  const { data, error } = await admin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("role", "admin")
+    .maybeSingle();
+
+  if (error) {
+    console.error("save-contact admin role lookup failed", error);
+    return false;
+  }
+
+  return Boolean(data);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: corsHeaders });
   try {
@@ -139,6 +155,11 @@ Deno.serve(async (req) => {
     if (!clean(row.name)) return json({ ok: false, error: "name_required" }, 400);
 
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    // Shared contact records affect every customer's search results. Do not
+    // treat arbitrary authenticated browser payloads as trusted ingestion.
+    if (!await isAdmin(admin, user.id)) {
+      return json({ ok: false, error: "forbidden" }, 403);
+    }
     const now = new Date().toISOString();
 
     if (kind === "journalists") {

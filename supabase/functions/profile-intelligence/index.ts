@@ -20,6 +20,13 @@ const corsHeaders = {
 };
 
 const MODEL = "gpt-4o-mini";
+const DAILY_GENERATION_LIMIT = 25;
+
+class HttpError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
 
 function json(body: unknown, init: ResponseInit = {}) {
   return new Response(JSON.stringify(body), {
@@ -55,6 +62,23 @@ async function getAuthenticatedUser(req: Request) {
   const { data, error } = await userClient.auth.getUser();
   if (error || !data.user) return null;
   return data.user;
+}
+
+async function requireGenerationAccess(admin: AdminClient, userId: string) {
+  const [{ data: profile, error: profileError }, { data: role, error: roleError }] = await Promise.all([
+    admin.from("profiles").select("sub_active").eq("id", userId).maybeSingle(),
+    admin.from("user_roles").select("role").eq("user_id", userId).eq("role", "admin").maybeSingle(),
+  ]);
+  if (profileError || roleError) throw new HttpError("Unable to verify generation access.", 503);
+  if (role) return;
+  if (!profile?.sub_active) throw new HttpError("An active plan is required to generate AI profiles.", 403);
+
+  const { data: allowed, error: limitError } = await admin.rpc("consume_profile_intelligence_generation", {
+    _user: userId,
+    _daily_limit: DAILY_GENERATION_LIMIT,
+  });
+  if (limitError) throw new HttpError("Profile generation is temporarily unavailable.", 503);
+  if (!allowed) throw new HttpError("Daily AI profile generation limit reached.", 429);
 }
 
 async function loadContact(admin: AdminClient, contactKind: ContactKind, contactId: number) {
@@ -269,6 +293,9 @@ Deno.serve(async (req) => {
       return json({ profile: data, cached: false });
     }
 
+    // Only paid users can start a fresh generation; cached profiles remain readable.
+    await requireGenerationAccess(admin, user.id);
+
     await admin.from("contact_ai_profiles").upsert({
       contact_kind,
       contact_id,
@@ -303,6 +330,9 @@ Deno.serve(async (req) => {
     return json({ profile: data, cached: false });
   } catch (error) {
     console.error("profile-intelligence error", error);
-    return json({ error: error instanceof Error ? error.message : "Unable to generate profile intelligence." }, { status: 400 });
+    return json(
+      { error: error instanceof Error ? error.message : "Unable to generate profile intelligence." },
+      { status: error instanceof HttpError ? error.status : 400 },
+    );
   }
 });

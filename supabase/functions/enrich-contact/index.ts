@@ -366,6 +366,20 @@ function sourceTable(value: unknown): "journalist" | "creators" | null {
   return null;
 }
 
+async function isAdmin(admin: ReturnType<typeof createClient>, userId: string) {
+  const { data, error } = await admin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("role", "admin")
+    .maybeSingle();
+  if (error) {
+    console.error("enrich-contact admin role lookup failed", error);
+    return false;
+  }
+  return Boolean(data);
+}
+
 async function extractFields(
   name: string,
   context: string,
@@ -455,18 +469,24 @@ Deno.serve(async (req) => {
 
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const root = record(body);
-    const contact = { ...record(root.contact), ...root };
-    const table = sourceTable(contact.source_table) ?? (root.kind === "creator" ? "creators" : "journalist");
+    const clientContact = { ...record(root.contact), ...root };
+    const table = sourceTable(clientContact.source_table) ?? (root.kind === "creator" ? "creators" : "journalist");
     const allFields = (table === "journalist" ? JOURNALIST_FIELDS : CREATOR_FIELDS) as readonly string[];
     const requestedFields = root.fields;
-    const sourceId = numericId(contact.source_id ?? root.id);
-    const shouldUpdateDb = sourceId !== null && sourceTable(contact.source_table ?? root.kind) !== null;
+    const sourceId = numericId(clientContact.source_id ?? root.id);
+    // A contact ID from the browser is never authority to update a shared row.
+    // Regular users receive enrichment results only; verified admins may persist them.
+    const shouldUpdateDb = await isAdmin(admin, user.id)
+      && sourceId !== null
+      && sourceTable(clientContact.source_table ?? root.kind) !== null;
 
     let row: Record<string, unknown> = {};
     if (shouldUpdateDb) {
       const { data: dbRow } = await admin.from(table).select("*").eq("id", sourceId).maybeSingle();
       if (dbRow) row = dbRow;
     }
+
+    const contact = shouldUpdateDb ? row : clientContact;
 
     const targetFields = (Array.isArray(requestedFields) && requestedFields.length
       ? requestedFields.filter((f: string) => allFields.includes(f))

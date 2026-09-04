@@ -1,8 +1,41 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "https://trymedia.ai",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
+type AdminAuthorization =
+  | { caller: { kind: "internal" } | { kind: "admin"; userId: string } }
+  | { error: string; status: number };
+
+// Kept local so this function can be deployed directly from the Supabase Dashboard.
+async function requireAdminOrInternal(req: Request): Promise<AdminAuthorization> {
+  try {
+    const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+    if (!token) return { error: "missing_auth", status: 401 };
+    const url = Deno.env.get("SUPABASE_URL")?.trim();
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim();
+    if (!url || !serviceKey) throw new Error("Supabase authorization configuration missing");
+    if (token === serviceKey) return { caller: { kind: "internal" } };
+
+    const admin = createClient(url, serviceKey);
+    const { data: authData, error: authError } = await admin.auth.getUser(token);
+    if (authError || !authData.user) return { error: "invalid_auth", status: 401 };
+    const { data: role, error: roleError } = await admin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", authData.user.id)
+      .eq("role", "admin")
+      .maybeSingle();
+    if (roleError || !role) return { error: "forbidden", status: 403 };
+    return { caller: { kind: "admin", userId: authData.user.id } };
+  } catch (error) {
+    console.error("Exa authorization failed", error);
+    return { error: "authorization_unavailable", status: 503 };
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -14,6 +47,9 @@ Deno.serve(async (req) => {
       status,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+
+  const authorization = await requireAdminOrInternal(req);
+  if ("error" in authorization) return json({ error: authorization.error }, authorization.status);
 
   try {
     const EXA_API_KEY = Deno.env.get("EXA_API_KEY");

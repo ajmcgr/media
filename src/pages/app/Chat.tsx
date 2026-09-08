@@ -41,6 +41,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { isGrowthPlanIdentifier } from "@/lib/plans";
 import { cn } from "@/lib/utils";
 import { trackEvent } from "@/lib/analytics";
+import { saveWebContact } from "@/lib/savedWebContacts";
 
 type Msg = { role: "user" | "assistant"; content: string; ts?: string };
 
@@ -101,7 +102,6 @@ const CREATOR_COLS: { key: keyof Row | "authority"; label: string }[] = [
 ];
 
 const MIN_CHAT_RESULTS = 25;
-const AUTO_PERSIST_WEB_ROWS = 12;
 const SEARCH_PAGE_SIZE = 50;
 const CHAT_STOPWORDS = new Set([
   "a", "an", "and", "are", "at", "based", "best", "by", "find", "for", "from",
@@ -278,10 +278,6 @@ function matchesFallbackSubject(row: Row, query: string) {
   return false;
 }
 
-function rowPersistenceKey(row: Row) {
-  return String(row.source_url ?? row.email ?? `${row.name}|${row.outlet}|${row.title}`);
-}
-
 function inferredTopicFromQuery(query: string): string | null {
   const normalized = ` ${normalizeQuery(query)} `;
   for (const { trigger, terms } of TOPIC_FALLBACK_ALIASES) {
@@ -329,12 +325,6 @@ function topicValue(row: Row, query = ""): string | null {
     if (!category || TOPIC_FALLBACK_ALIASES.some(({ trigger, terms }) => trigger === inferred && terms.some((term) => hay.includes(term)))) return formatTopicLabel(inferred);
   }
   return category ? formatTopicLabel(category) : null;
-}
-
-function shouldAutoPersistRow(kind: "journalists" | "creators", row: Row) {
-  if (row.source !== "exa" || !row.name) return false;
-  if (kind === "journalists") return !!(row.email || row.outlet || row.title);
-  return !!(row.email || row.ig_handle || row.youtube_url || row.outlet);
 }
 
 async function fetchJournalistFallback(query: string): Promise<Row[]> {
@@ -578,7 +568,6 @@ const Chat = () => {
   }, [sidebarCollapsed]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
-  const autoPersistedWebRows = useRef<Set<string>>(new Set());
 
   // Compute a stable rowKey for each row (db: source_table:source_id, web: web:url|domain|name+outlet)
   const computeRowKey = (r: Row): string | null => {
@@ -820,66 +809,6 @@ const Chat = () => {
     document.addEventListener("submit", preventChatFormSubmit, true);
     return () => document.removeEventListener("submit", preventChatFormSubmit, true);
   }, []);
-
-  useEffect(() => {
-    if (!results) return;
-
-    const persistable = results.rows
-      .map((row, index) => ({ row, index }))
-      .filter(({ row }) => shouldAutoPersistRow(results.kind, row))
-      .filter(({ row }) => !autoPersistedWebRows.current.has(rowPersistenceKey(row)))
-      .slice(0, AUTO_PERSIST_WEB_ROWS);
-
-    if (!persistable.length) return;
-
-    let cancelled = false;
-    (async () => {
-      for (const { row } of persistable) {
-        if (cancelled) break;
-        const key = rowPersistenceKey(row);
-        autoPersistedWebRows.current.add(key);
-        try {
-          const { data, error } = await supabase.functions.invoke("save-contact", {
-            body: {
-              kind: results.kind,
-              row: {
-                name: row.name,
-                outlet: row.outlet,
-                title: row.title,
-                category: row.category,
-                country: row.country,
-                email: row.email,
-                ig_handle: row.ig_handle,
-                youtube_url: row.youtube_url,
-                source_url: row.source_url,
-              },
-            },
-          });
-          if (cancelled || error || !data?.ok) continue;
-          setResults((prev) => {
-            if (!prev || prev.kind !== results.kind) return prev;
-            const sourceTable: Row["source_table"] = prev.kind === "journalists" ? "journalist" : "creators";
-            const rows = prev.rows.map((candidate) => {
-              if (rowPersistenceKey(candidate) !== key) return candidate;
-              return {
-                ...candidate,
-                source: "database" as const,
-                source_id: data.id,
-                source_table: sourceTable,
-              };
-            });
-            return { ...prev, rows };
-          });
-        } catch {
-          // Silent on background persistence.
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [results]);
 
   const handleSend = async (inputValue = input.trim(), reset = false) => {
     
@@ -1126,35 +1055,12 @@ const Chat = () => {
   const saveExaRow = async (idx: number) => {
     if (!results) return;
     const row = results.rows[idx];
-    if (!row || row.source !== "exa") return;
+    if (!row || row.source !== "exa" || !user) return;
     setSavingIdx((s) => ({ ...s, [idx]: "saving" }));
     try {
-      const { data, error } = await supabase.functions.invoke("save-contact", {
-        body: {
-          kind: results.kind,
-          row: {
-            name: row.name,
-            outlet: row.outlet,
-            title: row.title,
-            category: row.category,
-            country: row.country,
-            email: row.email,
-            ig_handle: row.ig_handle,
-            youtube_url: row.youtube_url,
-            source_url: row.source_url,
-          },
-        },
-      });
-      if (error || !data?.ok) throw error || new Error(data?.error || "Save failed");
+      await saveWebContact(user.id, results.kind, row);
       setSavingIdx((s) => ({ ...s, [idx]: "saved" }));
-      setResults((prev) => {
-        if (!prev) return prev;
-        const newSourceTable: "journalist" | "creators" = prev.kind === "journalists" ? "journalist" : "creators";
-        const rows: Row[] = prev.rows.map((r, i) => i === idx
-          ? { ...r, source: "database", source_id: data.id, source_table: newSourceTable }
-          : r);
-        return { ...prev, rows };
-      });
+      toast.success("Saved to your private contacts");
     } catch (_) {
       toast.error("Could not save this web result");
       setSavingIdx((s) => { const c = { ...s }; delete c[idx]; return c; });
@@ -1199,10 +1105,8 @@ const Chat = () => {
 
           <nav className={cn("pb-2 space-y-0.5 flex-1", sidebarCollapsed ? "px-2" : "px-2")}>
             <div data-tour="nav-search"><SidebarNavItem icon={SearchIcon} label="Search" active collapsed={sidebarCollapsed} onClick={() => navigate("/search")} /></div>
-            {hasGrowth && (
-              <div data-tour="nav-database"><SidebarNavItem icon={Database} label="Database" collapsed={sidebarCollapsed} onClick={() => navigate("/database")} /></div>
-            )}
-            <div data-tour="nav-monitor"><SidebarNavItem icon={Radar} label="Monitor" collapsed={sidebarCollapsed} onClick={() => navigate("/monitor")} /></div>
+            <div data-tour="nav-database"><SidebarNavItem icon={Database} label={hasGrowth ? "Database" : "Database · Growth"} collapsed={sidebarCollapsed} onClick={() => navigate("/database")} /></div>
+            <div data-tour="nav-monitor"><SidebarNavItem icon={Radar} label={hasGrowth ? "Monitor" : "Monitor · Growth"} collapsed={sidebarCollapsed} onClick={() => navigate("/monitor")} /></div>
             <div data-tour="nav-inbox"><InboxSheet triggerNode={<SidebarNavButton icon={InboxIcon} label="Inbox" collapsed={sidebarCollapsed} />} /></div>
             <div data-tour="nav-lists"><ListsSheet triggerNode={<SidebarNavButton icon={ListChecks} label="Lists" collapsed={sidebarCollapsed} />} /></div>
             <div data-tour="nav-export"><SidebarNavItem
@@ -1812,25 +1716,14 @@ const Chat = () => {
         creatorIds={results?.kind === "creators" ? selectedDbIds : undefined}
         resolveExtraIds={selectedWebRows.length === 0 ? undefined : async () => {
           const kind = results?.kind;
-          if (!kind) return {};
-          const ids: number[] = [];
+          if (!kind || !user) return {};
+          const savedWebContactIds: string[] = [];
           for (const row of selectedWebRows) {
             try {
-              const { data, error } = await supabase.functions.invoke("save-contact", {
-                body: {
-                  kind,
-                  row: {
-                    name: row.name, outlet: row.outlet, title: row.title,
-                    category: row.category, country: row.country, email: row.email,
-                    ig_handle: row.ig_handle, youtube_url: row.youtube_url, source_url: row.source_url,
-                  },
-                },
-              });
-              if (error || !data?.ok) continue;
-              if (typeof data.id === "number") ids.push(data.id);
+              savedWebContactIds.push(await saveWebContact(user.id, kind, row));
             } catch { /* skip */ }
           }
-          return kind === "journalists" ? { journalistIds: ids } : { creatorIds: ids };
+          return { savedWebContactIds };
         }}
         onClear={() => setSelectedRows(new Set())}
       />

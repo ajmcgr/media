@@ -18,12 +18,14 @@ const PaidRoute = ({ children, allowedPlans, requireGrowth = false }: PaidRouteP
 
   if (authLoading || subLoading) return <FullscreenSpinner />;
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
-  if (!active) return <Navigate to="/pricing" replace />;
+  const pricingPath = (upgrade: "paid" | "growth") =>
+    `/pricing?upgrade=${upgrade}&feature=${encodeURIComponent(location.pathname)}`;
+  if (!active) return <Navigate to={pricingPath("paid")} replace />;
   if (requireGrowth) {
-    if (!isGrowthPlanIdentifier(planIdentifier)) return <Navigate to="/pricing?upgrade=growth" replace />;
+    if (!isGrowthPlanIdentifier(planIdentifier)) return <Navigate to={pricingPath("growth")} replace />;
   } else if (allowedPlans && allowedPlans.length > 0) {
     const ok = planIdentifier && allowedPlans.includes(planIdentifier);
-    if (!ok) return <Navigate to="/pricing?upgrade=growth" replace />;
+    if (!ok) return <Navigate to={pricingPath("growth")} replace />;
   }
   return children;
 };

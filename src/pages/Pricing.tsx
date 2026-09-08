@@ -34,7 +34,7 @@ const TIERS: Tier[] = [
     yearly: 290,
     cta: "Start Free Trial",
     features: [
-      "~500 AI searches / month",
+      "200,000 AI credits / month",
       "Verified contact emails where available, plus on-demand enrichment",
       "Capped at 100 media contacts per query",
       "Top-up credits any time",
@@ -52,7 +52,7 @@ const TIERS: Tier[] = [
     badge: "Most popular",
     cta: "Start Free Trial",
     features: [
-      "~3,000 AI searches / month",
+      "1,000,000 AI credits / month",
       "Verified contact emails where available, plus on-demand enrichment",
       "Unlimited media contacts per query",
       "Top-up credits any time",
@@ -92,6 +92,13 @@ const Pricing = () => {
   const resumedCheckout = useRef(false);
   const [pendingPlan, setPendingPlan] = useState<PlanId | null>(null);
   const [pendingPack, setPendingPack] = useState<TopupPack | null>(null);
+  const upgrade = searchParams.get("upgrade");
+
+  useEffect(() => {
+    if (upgrade === "paid" || upgrade === "growth") {
+      trackEvent("paywall_viewed", { required_plan: upgrade, source: searchParams.get("feature") ?? "pricing" });
+    }
+  }, [searchParams, upgrade]);
 
   const handleSubscribe = async (plan: PlanId) => {
     if (plan === "enterprise") {
@@ -182,8 +189,16 @@ const Pricing = () => {
             Flexible pricing plans to suit your needs
           </h1>
           <p className="text-muted-foreground text-lg">
-            Choose between monthly and yearly subscriptions. Cancel any time.
+            Every account includes 5,000 free AI credits each month. Paid plans add predictable monthly credits. Cancel any time.
           </p>
+
+          {upgrade && (
+            <div className="mt-5 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-foreground">
+              {upgrade === "growth"
+                ? "Growth unlocks the full database, Monitor, Inbox, and team workflows."
+                : "Choose a plan to continue using this paid workspace feature."}
+            </div>
+          )}
 
           <div className="inline-flex items-center mt-8 p-1 rounded-md border border-border bg-secondary">
             {(["monthly", "yearly"] as Interval[]).map((opt) => (
@@ -270,7 +285,7 @@ const Pricing = () => {
         </div>
 
         <p className="text-center text-xs text-muted-foreground mt-10">
-          All prices in USD. Subscriptions renew automatically until canceled.
+          AI credit usage varies by request complexity. All prices are in USD. Subscriptions renew automatically until canceled.
         </p>
       </main>
       <Footer />

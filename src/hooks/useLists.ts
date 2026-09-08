@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { SavedWebContact } from "@/lib/savedWebContacts";
 
 export type JournalistList = {
   id: string;
@@ -15,6 +16,13 @@ export type ListItem = {
   connected_journalist: number | null;
   connected_creator: number | null;
   created_at: string;
+};
+
+export type SavedWebListItem = {
+  id: number;
+  list_id: string;
+  created_at: string;
+  saved_web_contacts: SavedWebContact | null;
 };
 
 export const useLists = (userId: string | undefined) =>
@@ -45,6 +53,21 @@ export const useListItems = (listId: string | undefined) =>
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as ListItem[];
+    },
+  });
+
+export const useSavedWebListItems = (listId: string | undefined) =>
+  useQuery({
+    queryKey: ["saved-web-list-items", listId],
+    enabled: !!listId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("saved_web_list_items")
+        .select("id,list_id,created_at,saved_web_contacts(*)")
+        .eq("list_id", listId!)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as SavedWebListItem[];
     },
   });
 
@@ -110,7 +133,7 @@ export const useAddToList = (userId: string | undefined) => {
 export const useBulkAddToList = (userId: string | undefined) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { listId: string; journalistIds?: number[]; creatorIds?: number[] }) => {
+    mutationFn: async (args: { listId: string; journalistIds?: number[]; creatorIds?: number[]; savedWebContactIds?: string[] }) => {
       const rows: Record<string, unknown>[] = [];
       for (const jid of args.journalistIds ?? []) {
         rows.push({ connected_journalist_list: args.listId, connected_journalist: jid });
@@ -118,9 +141,23 @@ export const useBulkAddToList = (userId: string | undefined) => {
       for (const cid of args.creatorIds ?? []) {
         rows.push({ connected_journalist_list: args.listId, connected_creator: cid });
       }
-      if (!rows.length) return { added: 0 };
-      const { error } = await supabase.from("journalist_list_items").insert(rows);
-      if (error) throw error;
+      if (rows.length) {
+        const { error } = await supabase.from("journalist_list_items").insert(rows);
+        if (error) throw error;
+      }
+
+      const savedWebRows = (args.savedWebContactIds ?? []).map((saved_web_contact_id) => ({
+        list_id: args.listId,
+        saved_web_contact_id,
+      }));
+      if (savedWebRows.length) {
+        const { error } = await supabase.from("saved_web_list_items").upsert(savedWebRows, {
+          onConflict: "list_id,saved_web_contact_id",
+          ignoreDuplicates: true,
+        });
+        if (error) throw error;
+      }
+      if (!rows.length && !savedWebRows.length) return { added: 0 };
 
       // Fire-and-forget enrichment for journalists missing emails.
       if (args.journalistIds?.length) {
@@ -146,10 +183,11 @@ export const useBulkAddToList = (userId: string | undefined) => {
           // non-fatal
         }
       }
-      return { added: rows.length };
+      return { added: rows.length + savedWebRows.length };
     },
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ["list-items", vars.listId] });
+      qc.invalidateQueries({ queryKey: ["saved-web-list-items", vars.listId] });
       qc.invalidateQueries({ queryKey: ["lists", userId] });
     },
   });
@@ -163,6 +201,17 @@ export const useRemoveFromList = () => {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["list-items"] }),
+  });
+};
+
+export const useRemoveSavedWebFromList = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (itemId: number) => {
+      const { error } = await supabase.from("saved_web_list_items").delete().eq("id", itemId);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["saved-web-list-items"] }),
   });
 };
 

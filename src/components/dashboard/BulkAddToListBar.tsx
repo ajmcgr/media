@@ -9,14 +9,15 @@ import { Plus, Loader2, X, ListPlus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
+import { trackEvent } from "@/lib/analytics";
 
 type Props = {
   count: number;
   journalistIds?: number[];
   creatorIds?: number[];
   onClear: () => void;
-  /** Optional: resolve additional ids (e.g. by saving web rows first) before bulk add. */
-  resolveExtraIds?: () => Promise<{ journalistIds?: number[]; creatorIds?: number[] }>;
+  /** Resolve private web discoveries before attaching them to a list. */
+  resolveExtraIds?: () => Promise<{ journalistIds?: number[]; creatorIds?: number[]; savedWebContactIds?: string[] }>;
 };
 
 export const BulkAddToListBar = ({ count, journalistIds, creatorIds, onClear, resolveExtraIds }: Props) => {
@@ -37,17 +38,19 @@ export const BulkAddToListBar = ({ count, journalistIds, creatorIds, onClear, re
       setResolving(true);
       try {
         const extra = await resolveExtraIds();
-        if (extra.journalistIds?.length) jIds = jIds.concat(extra.journalistIds);
-        if (extra.creatorIds?.length) cIds = cIds.concat(extra.creatorIds);
+      if (extra.journalistIds?.length) jIds = jIds.concat(extra.journalistIds);
+      if (extra.creatorIds?.length) cIds = cIds.concat(extra.creatorIds);
+      return { journalistIds: jIds, creatorIds: cIds, savedWebContactIds: extra.savedWebContactIds ?? [] };
       } finally { setResolving(false); }
     }
-    return { journalistIds: jIds, creatorIds: cIds };
+    return { journalistIds: jIds, creatorIds: cIds, savedWebContactIds: [] };
   };
 
   const handleAdd = async (listId: string, listName: string) => {
     try {
       const ids = await collectIds();
       const res = await bulk.mutateAsync({ listId, ...ids });
+      trackEvent("contacts_added_to_list", { count: res.added, source: "bulk_selection" });
       toast({ title: `Added ${res.added} to ${listName}` });
       onClear();
     } catch (e) {
@@ -62,6 +65,7 @@ export const BulkAddToListBar = ({ count, journalistIds, creatorIds, onClear, re
       const list = await createList.mutateAsync(n);
       const ids = await collectIds();
       const res = await bulk.mutateAsync({ listId: list.id, ...ids });
+      trackEvent("contacts_added_to_list", { count: res.added, source: "new_list" });
       toast({ title: `Added ${res.added} to ${n}` });
       setName(""); setCreating(false);
       onClear();

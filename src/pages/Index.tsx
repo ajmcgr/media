@@ -158,7 +158,7 @@ const TIERS: Tier[] = [
     yearly: 290,
     cta: "Start Free Trial",
     features: [
-      "~500 AI searches / month",
+      "200,000 AI credits / month",
       "Verified contact emails where available, plus on-demand enrichment",
       "Capped at 100 media contacts per query",
       "Top-up credits any time",
@@ -176,7 +176,7 @@ const TIERS: Tier[] = [
     badge: "Most popular",
     cta: "Start Free Trial",
     features: [
-      "~3,000 AI searches / month",
+      "1,000,000 AI credits / month",
       "Verified contact emails where available, plus on-demand enrichment",
       "Unlimited media contacts per query",
       "Top-up credits any time",
@@ -370,8 +370,8 @@ const Index = () => {
   };
 
   const startTrial = () => {
-    trackEvent("trial_cta_clicked", { source: "homepage", authenticated: Boolean(user) });
-    navigate(user ? "/pricing" : `/signup?next=${encodeURIComponent("/pricing")}`);
+    trackEvent("free_search_cta_clicked", { source: "homepage", authenticated: Boolean(user) });
+    navigate(user ? "/search" : `/signup?next=${encodeURIComponent("/search")}`);
   };
 
   const PrimaryCTA = ({ className = "" }: { className?: string }) => (
@@ -379,7 +379,7 @@ const Index = () => {
       onClick={startTrial}
       className={`bg-primary hover:bg-primary-hover text-primary-foreground font-medium rounded-lg px-6 h-12 text-sm ${className}`}
     >
-      Start Free Trial <ArrowRight className="ml-2 h-4 w-4" />
+      Try free search <ArrowRight className="ml-2 h-4 w-4" />
     </Button>
   );
 
@@ -404,10 +404,10 @@ const Index = () => {
             className="text-[34px] md:text-[56px] lg:text-[68px] font-medium tracking-tight leading-[1.04] mb-8"
             style={{ fontFamily: "var(--font-heading)", color: "#282c34" }}
           >
-            Search <span style={{ color: "#282c34" }}>Journalists and Creators</span> Using AI
+            Find the journalists most likely to cover your next story.
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto mb-10">
-            Find the right voices for your stories, campaigns, and projects in just a few clicks from our database of top journalists and creators — powered by AI.
+            Turn a launch, campaign, or topic into a focused journalist and creator list, then save contacts and run outreach from one workspace.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mb-6">
@@ -425,9 +425,9 @@ const Index = () => {
           
 
           <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-sm text-muted-foreground">
-            <span className="flex items-center gap-2"><Check className="h-4 w-4 text-primary" /> 1-month free trial</span>
-            <span className="flex items-center gap-2"><Check className="h-4 w-4 text-primary" /> Secure payment</span>
-            <span className="flex items-center gap-2"><Check className="h-4 w-4 text-primary" /> Cancel any-time</span>
+            <span className="flex items-center gap-2"><Check className="h-4 w-4 text-primary" /> 5,000 free AI credits each month</span>
+            <span className="flex items-center gap-2"><Check className="h-4 w-4 text-primary" /> Save focused media lists</span>
+            <span className="flex items-center gap-2"><Check className="h-4 w-4 text-primary" /> Upgrade only when you need more</span>
           </div>
         </div>
 

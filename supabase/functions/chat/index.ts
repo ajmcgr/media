@@ -2482,7 +2482,7 @@ async function loadUsageSummary(
     ? ["growth", "both", "media-pro", "pro", "enterprise"].includes(plan)
       ? 1_000_000
       : 200_000
-    : 20_000;
+    : 5_000;
   const used = finiteNumber((usageResult.data as { tokens_used?: number | string } | null)?.tokens_used ?? 0);
   const profileCredits = finiteNumber(profile?.chat_credits ?? 0);
 
@@ -2669,9 +2669,9 @@ if (Deno.env.get("DENO_TESTING") !== "true")
       } catch (error) {
         console.warn("[chat.usage_fallback_beta_allowance]", error instanceof Error ? error.message : String(error));
         summary = {
-          allowance: 20_000,
+          allowance: 5_000,
           used: 0,
-          remaining: 20_000,
+          remaining: 5_000,
           credits: 0,
           period_ym: new Date().toISOString().slice(0, 7),
           sub_active: false,

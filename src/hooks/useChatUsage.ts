@@ -114,7 +114,7 @@ async function loadUsageFallback(userId: string, base?: ChatUsage): Promise<Chat
   const plan = String(profile?.plan_identifier ?? "").toLowerCase();
   const allowance = base?.allowance ?? (profile?.sub_active
     ? (["growth", "both", "media-pro", "pro", "enterprise"].includes(plan) ? 1_000_000 : 200_000)
-    : 20_000);
+    : 5_000);
   const used = base?.used ?? toNumber((usageResult.data as { tokens_used?: number | string } | null)?.tokens_used);
   const profileCredits = Math.max(
     toNumber(base?.credits),

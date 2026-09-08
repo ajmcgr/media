@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ListChecks, Plus, Trash2, Download, Loader2 } from "lucide-react";
 import {
-  useLists, useListItems, useCreateList, useDeleteList, useRemoveFromList,
+  useLists, useListItems, useSavedWebListItems, useCreateList, useDeleteList, useRemoveFromList, useRemoveSavedWebFromList,
 } from "@/hooks/useLists";
 import { supabase } from "@/integrations/supabase/client";
 import { toCsv, downloadCsv } from "@/lib/csv";
@@ -30,9 +30,11 @@ export const ListsSheet = ({ triggerNode, triggerClassName, triggerChildren }: L
 
   const lists = useLists(user?.id);
   const items = useListItems(activeId);
+  const savedWebItems = useSavedWebListItems(activeId);
   const createList = useCreateList(user?.id);
   const deleteList = useDeleteList(user?.id);
   const removeItem = useRemoveFromList();
+  const removeSavedWebItem = useRemoveSavedWebFromList();
 
   const handleCreate = async () => {
     const name = newName.trim();
@@ -65,6 +67,10 @@ export const ListsSheet = ({ triggerNode, triggerClassName, triggerChildren }: L
         .in("id", creatorIds);
       data?.forEach((d) => rows.push({ type: "creator", ...d }));
     }
+    savedWebItems.data?.forEach((item) => {
+      const contact = item.saved_web_contacts;
+      if (contact) rows.push({ type: contact.kind, ...contact });
+    });
     if (!rows.length) {
       toast({ title: "Nothing to export", description: "This list is empty." });
       return;
@@ -134,7 +140,9 @@ export const ListsSheet = ({ triggerNode, triggerClassName, triggerChildren }: L
                         </Button>
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {items.isLoading ? "Loading…" : `${items.data?.length ?? 0} items`}
+                        {items.isLoading || savedWebItems.isLoading
+                          ? "Loading…"
+                          : `${(items.data?.length ?? 0) + (savedWebItems.data?.length ?? 0)} items`}
                       </div>
                       {items.data?.map((it) => (
                         <div key={it.id} className="flex items-center justify-between text-xs px-2 py-1.5 rounded bg-secondary/40">
@@ -142,6 +150,17 @@ export const ListsSheet = ({ triggerNode, triggerClassName, triggerChildren }: L
                             {it.connected_journalist ? `Journalist #${it.connected_journalist}` : `Creator #${it.connected_creator}`}
                           </span>
                           <button onClick={() => removeItem.mutate(it.id)} className="text-muted-foreground hover:text-destructive">
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                      {savedWebItems.data?.map((it) => (
+                        <div key={`web-${it.id}`} className="flex items-center justify-between text-xs px-2 py-1.5 rounded bg-secondary/40">
+                          <span className="truncate">
+                            {it.saved_web_contacts?.name ?? "Saved web contact"}
+                            {it.saved_web_contacts?.outlet ? ` · ${it.saved_web_contacts.outlet}` : ""}
+                          </span>
+                          <button onClick={() => removeSavedWebItem.mutate(it.id)} className="text-muted-foreground hover:text-destructive">
                             <Trash2 className="h-3 w-3" />
                           </button>
                         </div>

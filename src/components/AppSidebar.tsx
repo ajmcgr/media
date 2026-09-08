@@ -71,7 +71,7 @@ export default function AppSidebar({ active }: AppSidebarProps) {
   });
 
   useEffect(() => {
-    try { localStorage.setItem("chat.sidebarCollapsed", collapsed ? "1" : "0"); } catch {}
+    try { localStorage.setItem("chat.sidebarCollapsed", collapsed ? "1" : "0"); } catch { /* Storage can be unavailable in private browser contexts. */ }
   }, [collapsed]);
 
   return (
@@ -99,10 +99,8 @@ export default function AppSidebar({ active }: AppSidebarProps) {
 
       <nav className="pb-2 space-y-0.5 flex-1 px-2">
         <SidebarNavItem icon={SearchIcon} label="Search" collapsed={collapsed} active={active === "search"} onClick={() => navigate("/search")} />
-        {hasGrowth && (
-          <SidebarNavItem icon={Database} label="Database" collapsed={collapsed} active={active === "database"} onClick={() => navigate("/database")} />
-        )}
-        <SidebarNavItem icon={Radar} label="Monitor" collapsed={collapsed} active={active === "monitor"} onClick={() => navigate("/monitor")} />
+        <SidebarNavItem icon={Database} label={hasGrowth ? "Database" : "Database · Growth"} collapsed={collapsed} active={active === "database"} onClick={() => navigate("/database")} />
+        <SidebarNavItem icon={Radar} label={hasGrowth ? "Monitor" : "Monitor · Growth"} collapsed={collapsed} active={active === "monitor"} onClick={() => navigate("/monitor")} />
         <InboxSheet triggerNode={<SidebarNavButton icon={InboxIcon} label="Inbox" collapsed={collapsed} />} />
         <ListsSheet triggerNode={<SidebarNavButton icon={ListChecks} label="Lists" collapsed={collapsed} />} />
         <SidebarNavItem icon={Download} label="Export" collapsed={collapsed} disabled />

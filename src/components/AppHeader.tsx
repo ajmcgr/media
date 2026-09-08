@@ -82,8 +82,8 @@ export default function AppHeader({ active, rightExtras, hideNav }: AppHeaderPro
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-52">
               <DropdownMenuItem onSelect={() => navigate("/search")}>Search</DropdownMenuItem>
-              {hasGrowth && <DropdownMenuItem onSelect={() => navigate("/database")}>Database</DropdownMenuItem>}
-              <DropdownMenuItem onSelect={() => navigate("/monitor")}>Monitor</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => navigate("/database")}>{hasGrowth ? "Database" : "Database · Growth"}</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => navigate("/monitor")}>{hasGrowth ? "Monitor" : "Monitor · Growth"}</DropdownMenuItem>
               <DropdownMenuItem onSelect={() => window.setTimeout(() => mobileInboxTrigger.current?.click(), 0)}>
                 Inbox
               </DropdownMenuItem>
@@ -103,10 +103,8 @@ export default function AppHeader({ active, rightExtras, hideNav }: AppHeaderPro
         {!hideNav && (
           <div className="flex items-center gap-1 sm:gap-2">
             <PillNavButton to="/search" dataTour="nav-search">Search</PillNavButton>
-            {hasGrowth && (
-              <PillNavButton to="/database" dataTour="nav-database">Database</PillNavButton>
-            )}
-            <PillNavButton to="/monitor" dataTour="nav-monitor">Monitor</PillNavButton>
+            <PillNavButton to="/database" dataTour="nav-database">{hasGrowth ? "Database" : "Database · Growth"}</PillNavButton>
+            <PillNavButton to="/monitor" dataTour="nav-monitor">{hasGrowth ? "Monitor" : "Monitor · Growth"}</PillNavButton>
             <span data-tour="nav-inbox" className="inline-flex"><InboxSheet /></span>
             <span data-tour="nav-lists" className="inline-flex"><ListsSheet /></span>
             {rightExtras}

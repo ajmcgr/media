@@ -9,6 +9,7 @@ import { Plus, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
+import { trackEvent, trackOncePerSession } from "@/lib/analytics";
 
 type Props = { journalistId?: number; creatorId?: number };
 
@@ -23,6 +24,12 @@ export const AddToListMenu = ({ journalistId, creatorId }: Props) => {
   const handleAdd = async (listId: string) => {
     try {
       await addTo.mutateAsync({ listId, journalistId, creatorId });
+      trackEvent("contacts_added_to_list", { count: 1, source: "single_contact" });
+      trackOncePerSession("activation_completed", {
+        milestone: "contacts_saved_to_list",
+        count: 1,
+        source: "single_contact",
+      }, `activation_completed.${user?.id ?? "anonymous"}`);
       toast({ title: "Added to list" });
     } catch (e) {
       toast({ title: "Couldn't add", description: (e as Error).message, variant: "destructive" });
@@ -35,6 +42,12 @@ export const AddToListMenu = ({ journalistId, creatorId }: Props) => {
     try {
       const list = await createList.mutateAsync(n);
       await addTo.mutateAsync({ listId: list.id, journalistId, creatorId });
+      trackEvent("contacts_added_to_list", { count: 1, source: "new_list_single_contact" });
+      trackOncePerSession("activation_completed", {
+        milestone: "contacts_saved_to_list",
+        count: 1,
+        source: "new_list_single_contact",
+      }, `activation_completed.${user?.id ?? "anonymous"}`);
       setName(""); setCreating(false);
       toast({ title: `Added to ${n}` });
     } catch (e) {

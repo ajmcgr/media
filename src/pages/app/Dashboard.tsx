@@ -221,6 +221,7 @@ const Dashboard = () => {
     );
     const filename = `${tab}-${Date.now()}.csv`;
     downloadCsv(filename, toCsv(allRows as Record<string, unknown>[] as never, headers));
+    trackEvent("export_completed", { source_page: "dashboard", row_count: allRows.length, kind: tab });
     supabase.functions.invoke("send-export-notification", {
       body: { filename, rowCount: allRows.length, source: `dashboard (${tab})` },
     }).catch(() => {});

@@ -467,7 +467,7 @@ const Resources = () => {
                 rel="noopener noreferrer"
               >
                 <Zap className="mr-2 h-4 w-4" />
-                Start Free Trial
+                Start 30-day trial
               </a>
             </Button>
           </div>

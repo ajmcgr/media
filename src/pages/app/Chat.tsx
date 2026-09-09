@@ -40,7 +40,7 @@ import { MatchExplanationPopover } from "@/components/search/MatchExplanation";
 import { useSubscription } from "@/hooks/useSubscription";
 import { isGrowthPlanIdentifier } from "@/lib/plans";
 import { cn } from "@/lib/utils";
-import { trackEvent } from "@/lib/analytics";
+import { trackEvent, trackOncePerSession } from "@/lib/analytics";
 import { saveWebContact } from "@/lib/savedWebContacts";
 
 type Msg = { role: "user" | "assistant"; content: string; ts?: string };
@@ -79,6 +79,11 @@ type Pagination = { limit: number; offset: number; total_estimated: number; has_
 type Results =
   | { kind: "journalists" | "creators"; rows: Row[]; query?: string; intent?: { count?: number } | null; debug?: Record<string, unknown> | null; pagination?: Pagination | null; sources?: { database: number; web: number } | null }
   | null;
+
+const quotaReachedMessage = [
+  "**You have used your available search credits.**",
+  "[Buy a one-time credit top-up](/account#credits) to keep researching, or [start Starter](/pricing?upgrade=paid&feature=search_quota) for 200,000 monthly credits. Need the full database, Monitor, Inbox, or team workflows? [Choose Growth](/pricing?upgrade=growth&feature=search_quota).",
+].join("\n\n");
 
 const JOURNALIST_COLS: { key: keyof Row | "authority"; label: string }[] = [
   { key: "name", label: "Name" },
@@ -793,6 +798,7 @@ const Chat = () => {
         }
       })();
     } else if (topup === "cancelled") {
+      trackEvent("topup_checkout_cancelled");
       toast.info("Top-up cancelled");
       url.searchParams.delete("topup");
       window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
@@ -820,9 +826,14 @@ const Chat = () => {
     const total_available = monthly_remaining + topup_credits;
     
     if (total_available <= 0) {
+      trackOncePerSession("search_quota_reached", {
+        plan: planIdentifier || "free",
+        allowance,
+        topup_credits,
+      }, `search_quota_reached.${user?.id ?? "anonymous"}`);
       setMessages((m) => [
         ...m,
-        { role: "assistant", content: "You've used all your search credits for this month. Click the **Buy credits** button in the lower-left sidebar to buy a top-up pack, or [upgrade your plan](/pricing).", ts: new Date().toISOString() },
+        { role: "assistant", content: quotaReachedMessage, ts: new Date().toISOString() },
       ]);
       return;
     }
@@ -831,7 +842,6 @@ const Chat = () => {
     setInput("");
     setLoading(true);
     setLastQuery(inputValue);
-    markFirstSearchComplete();
     trackEvent("search_submitted", {
       query_length: inputValue.trim().length,
       is_new_search: reset,
@@ -883,7 +893,12 @@ const Chat = () => {
             await refreshUsage();
             return;
           }
-          setMessages((m) => [...m, { role: "assistant", content: "You've used all your search credits for this month. Click the **Buy credits** button in the lower-left sidebar to buy a top-up pack, or [upgrade your plan](/pricing).", ts: new Date().toISOString() }]);
+          trackOncePerSession("search_quota_reached", {
+            plan: planIdentifier || "free",
+            allowance,
+            topup_credits,
+          }, `search_quota_reached.${user?.id ?? "anonymous"}`);
+          setMessages((m) => [...m, { role: "assistant", content: quotaReachedMessage, ts: new Date().toISOString() }]);
           await refreshUsage();
           return;
         }
@@ -907,6 +922,14 @@ const Chat = () => {
           database_results: Number(data?.sources?.database ?? 0),
           web_results: Number(data?.sources?.web ?? 0),
         });
+        if (expanded.rows.length > 0) {
+          markFirstSearchComplete();
+          trackOncePerSession("activation_progressed", {
+            milestone: "search_returned_results",
+            result_count: expanded.rows.length,
+            result_type: expanded.kind,
+          }, `activation_progressed.${user?.id ?? "anonymous"}`);
+        }
         setSavingIdx({});
         upsertSearch.mutate({ tab: expanded.kind, query: { q: inputValue } });
       } else {
@@ -1123,6 +1146,7 @@ const Chat = () => {
                 );
                 const filename = `${results!.kind}-${Date.now()}.csv`;
                 downloadCsv(filename, toCsv(rows as never, headers));
+                trackEvent("export_completed", { source_page: "chat", row_count: rows.length, kind: results?.kind });
                 supabase.functions.invoke("send-export-notification", {
                   body: { filename, rowCount: rows.length, source: `chat (${results?.kind})` },
                 }).catch(() => {});
@@ -1456,6 +1480,14 @@ const Chat = () => {
                   {results.sources ? ` · ${results.sources.database} from database · ${results.sources.web} from web` : ""}
                 </div>
               </div>
+              {selectableKeys.length > 0 && (
+                <div className="flex items-center gap-3">
+                  <span className="hidden lg:inline text-xs text-muted-foreground">Select contacts, then add them to a list.</span>
+                  <Button type="button" size="sm" variant="outline" onClick={toggleAllRows}>
+                    {allRowsSelected ? "Clear selection" : `Select ${selectableKeys.length.toLocaleString()} loaded`}
+                  </Button>
+                </div>
+              )}
             </div>
             {results.rows.length === 0 ? (
               <div className="p-12 text-center max-w-md mx-auto">

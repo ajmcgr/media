@@ -237,7 +237,7 @@ const ToolsHub = () => {
             <Button asChild>
               <Link to="/pricing">
                 <Zap className="mr-2 h-4 w-4" />
-                Start Free Trial
+                Start 30-day trial
               </Link>
             </Button>
           </div>

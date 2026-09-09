@@ -75,6 +75,7 @@ const Signup = () => {
 
   const handleGoogle = async () => {
     trackEvent("sign_up_started", { method: "google", next });
+    try { sessionStorage.setItem("mediaai.signup.google_pending", next); } catch { /* analytics only */ }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {

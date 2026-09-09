@@ -68,7 +68,7 @@ const MediaAIBridge = () => {
                   target="_blank" 
                   rel="noopener noreferrer"
                 >
-                  Start Free Trial
+                  Start 30-day trial
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </a>
               </Button>

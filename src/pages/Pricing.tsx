@@ -32,14 +32,14 @@ const TIERS: Tier[] = [
     tagline: "Media AI search.",
     monthly: 29,
     yearly: 290,
-    cta: "Start Free Trial",
+    cta: "Start 30-day trial",
     features: [
       "200,000 AI credits / month",
       "Verified contact emails where available, plus on-demand enrichment",
       "Capped at 100 media contacts per query",
       "Top-up credits any time",
       "Email support",
-      "1-month free trial",
+      "30-day trial on paid plans",
     ],
   },
   {
@@ -50,7 +50,7 @@ const TIERS: Tier[] = [
     yearly: 990,
     highlight: true,
     badge: "Most popular",
-    cta: "Start Free Trial",
+    cta: "Start 30-day trial",
     features: [
       "1,000,000 AI credits / month",
       "Verified contact emails where available, plus on-demand enrichment",
@@ -63,7 +63,7 @@ const TIERS: Tier[] = [
       "Outreach Inbox — pitch & reply tracking",
       "Team workspaces — invite teammates, shared lists & roles",
       "Email support",
-      "1-month free trial",
+      "30-day trial on paid plans",
     ],
   },
   {
@@ -90,15 +90,27 @@ const Pricing = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const resumedCheckout = useRef(false);
+  const checkoutCancellationTracked = useRef(false);
   const [pendingPlan, setPendingPlan] = useState<PlanId | null>(null);
   const [pendingPack, setPendingPack] = useState<TopupPack | null>(null);
   const upgrade = searchParams.get("upgrade");
+  const checkoutStatus = searchParams.get("checkout");
 
   useEffect(() => {
     if (upgrade === "paid" || upgrade === "growth") {
       trackEvent("paywall_viewed", { required_plan: upgrade, source: searchParams.get("feature") ?? "pricing" });
     }
   }, [searchParams, upgrade]);
+
+  useEffect(() => {
+    if (checkoutStatus !== "cancelled" || checkoutCancellationTracked.current) return;
+    checkoutCancellationTracked.current = true;
+    trackEvent("checkout_cancelled", {
+      plan: searchParams.get("plan") ?? "unknown",
+      interval: searchParams.get("interval") ?? "unknown",
+    });
+    toast.info("Checkout cancelled. Your free credits are still available.");
+  }, [checkoutStatus, searchParams]);
 
   const handleSubscribe = async (plan: PlanId) => {
     if (plan === "enterprise") {
@@ -175,7 +187,7 @@ const Pricing = () => {
         <title>Pricing — Media AI</title>
         <meta
           name="description"
-          content="Simple plans for Media AI search and the journalist/creator database. Monthly or yearly. 1-month free trial."
+          content="Start with 5,000 free monthly AI credits, then choose a Media AI plan with a 30-day trial on paid plans."
         />
         <link rel="canonical" href="https://trymedia.ai/pricing" />
         <meta property="og:url" content="https://trymedia.ai/pricing" />
@@ -189,13 +201,15 @@ const Pricing = () => {
             Flexible pricing plans to suit your needs
           </h1>
           <p className="text-muted-foreground text-lg">
-            Every account includes 5,000 free AI credits each month. Paid plans add predictable monthly credits. Cancel any time.
+            Start with 5,000 free AI credits each month. Upgrade when you need more; paid plans include a 30-day trial. Cancel any time.
           </p>
 
           {upgrade && (
             <div className="mt-5 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-foreground">
               {upgrade === "growth"
                 ? "Growth unlocks the full database, Monitor, Inbox, and team workflows."
+                : searchParams.get("feature") === "search_quota"
+                  ? "Starter includes 200,000 credits each month. Choose Growth for the full database, Monitor, Inbox, and team workflows."
                 : "Choose a plan to continue using this paid workspace feature."}
             </div>
           )}
@@ -269,7 +283,7 @@ const Pricing = () => {
                       ? tier.cta
                       : user
                         ? tier.cta
-                        : "Start Free Trial"}
+                        : "Start 30-day trial"}
                 </Button>
                 <ul className="space-y-3 text-sm">
                   {tier.features.map((f) => (

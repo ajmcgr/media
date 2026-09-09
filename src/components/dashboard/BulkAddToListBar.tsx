@@ -9,7 +9,7 @@ import { Plus, Loader2, X, ListPlus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
-import { trackEvent } from "@/lib/analytics";
+import { trackEvent, trackOncePerSession } from "@/lib/analytics";
 
 type Props = {
   count: number;
@@ -51,6 +51,13 @@ export const BulkAddToListBar = ({ count, journalistIds, creatorIds, onClear, re
       const ids = await collectIds();
       const res = await bulk.mutateAsync({ listId, ...ids });
       trackEvent("contacts_added_to_list", { count: res.added, source: "bulk_selection" });
+      if (res.added > 0) {
+        trackOncePerSession("activation_completed", {
+          milestone: "contacts_saved_to_list",
+          count: res.added,
+          source: "bulk_selection",
+        }, `activation_completed.${user?.id ?? "anonymous"}`);
+      }
       toast({ title: `Added ${res.added} to ${listName}` });
       onClear();
     } catch (e) {
@@ -66,6 +73,13 @@ export const BulkAddToListBar = ({ count, journalistIds, creatorIds, onClear, re
       const ids = await collectIds();
       const res = await bulk.mutateAsync({ listId: list.id, ...ids });
       trackEvent("contacts_added_to_list", { count: res.added, source: "new_list" });
+      if (res.added > 0) {
+        trackOncePerSession("activation_completed", {
+          milestone: "contacts_saved_to_list",
+          count: res.added,
+          source: "new_list",
+        }, `activation_completed.${user?.id ?? "anonymous"}`);
+      }
       toast({ title: `Added ${res.added} to ${n}` });
       setName(""); setCreating(false);
       onClear();

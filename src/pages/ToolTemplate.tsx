@@ -1019,7 +1019,7 @@ const ToolTemplate = () => {
                 and connect with the right journalists and creators.
               </p>
               <Button asChild>
-                <Link to="/pricing">Start Free Trial</Link>
+                <Link to="/pricing">Start 30-day trial</Link>
               </Button>
             </div>
           </Card>

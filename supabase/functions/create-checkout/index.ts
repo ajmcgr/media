@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
         },
       },
       success_url: `${SITE_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${SITE_URL}/pricing`,
+      cancel_url: `${SITE_URL}/pricing?checkout=cancelled&plan=${plan_identifier}&interval=${interval}`,
     };
     if (customerId) {
       sessionParams.customer = customerId;

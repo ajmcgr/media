@@ -156,14 +156,14 @@ const TIERS: Tier[] = [
     tagline: "Media AI search.",
     monthly: 29,
     yearly: 290,
-    cta: "Start Free Trial",
+    cta: "Start 30-day trial",
     features: [
       "200,000 AI credits / month",
       "Verified contact emails where available, plus on-demand enrichment",
       "Capped at 100 media contacts per query",
       "Top-up credits any time",
       "Email support",
-      "1-month free trial",
+      "30-day trial on paid plans",
     ],
   },
   {
@@ -174,7 +174,7 @@ const TIERS: Tier[] = [
     yearly: 990,
     highlight: true,
     badge: "Most popular",
-    cta: "Start Free Trial",
+    cta: "Start 30-day trial",
     features: [
       "1,000,000 AI credits / month",
       "Verified contact emails where available, plus on-demand enrichment",
@@ -187,7 +187,7 @@ const TIERS: Tier[] = [
       "Outreach Inbox — pitch & reply tracking",
       "Team workspaces — invite teammates, shared lists & roles",
       "Email support",
-      "1-month free trial",
+      "30-day trial on paid plans",
     ],
   },
   {
@@ -217,7 +217,7 @@ const FAQS = [
   { q: "Do you offer verified email addresses?", a: "Many profiles include a verified email alongside available social handles, outlet, country, topic, and beat information. Use 'Find email' on profiles without an address to enrich the contact on demand." },
   { q: "Can I save lists, monitor coverage, and send pitches?", a: "Yes. Save any search, build custom lists, get brand mention alerts in Monitor, connect your inbox to send and track pitches, and export contacts to CSV any time." },
   { q: "How accurate is the contact data?", a: "Records are assembled from public sources and refreshed as changes are detected. Contact details can still change, so email enrichment is available when an address is missing." },
-  { q: "Is there a free trial? Can I cancel anytime?", a: "Every paid plan includes a 1-month free trial of the features included in that plan. You can change or cancel your plan at any time from your account — no contracts, no cancellation fees." },
+  { q: "What is free, and what does a paid trial include?", a: "Every account starts with 5,000 free AI credits each month. When you need more, paid plans include a 30-day trial of the features in that plan. You can change or cancel your plan at any time from your account — no contracts or cancellation fees." },
   { q: "Where does the contact data come from?", a: "Our proprietary AI crawler aggregates publicly available information from outlets, bylines, social platforms, and creator profiles across the web." },
 ];
 
@@ -425,7 +425,7 @@ const Index = () => {
           
 
           <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-sm text-muted-foreground">
-            <span className="flex items-center gap-2"><Check className="h-4 w-4 text-primary" /> 5,000 free AI credits each month</span>
+            <span className="flex items-center gap-2"><Check className="h-4 w-4 text-primary" /> Start with 5,000 free AI credits each month</span>
             <span className="flex items-center gap-2"><Check className="h-4 w-4 text-primary" /> Save focused media lists</span>
             <span className="flex items-center gap-2"><Check className="h-4 w-4 text-primary" /> Upgrade only when you need more</span>
           </div>
@@ -795,7 +795,7 @@ const Index = () => {
                 onClick={startTrial}
                 className="bg-white text-foreground hover:bg-white/90 font-medium rounded-lg px-6 h-12"
               >
-                Start Free Trial <ArrowRight className="ml-2 h-4 w-4" />
+                Start with free credits <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
             <div className="hidden md:block">

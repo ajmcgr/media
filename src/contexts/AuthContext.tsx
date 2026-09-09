@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { trackEvent, trackOncePerSession } from "@/lib/analytics";
 
 interface AuthContextValue {
   session: Session | null;
@@ -16,6 +17,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const trackAuthenticatedSession = (authenticatedUser: User, source: "auth_event" | "restored_session") => {
+    trackOncePerSession("active_session_started", { source }, `active_session_started.${authenticatedUser.id}`);
+
+    try {
+      const pendingNext = sessionStorage.getItem("mediaai.signup.google_pending");
+      if (pendingNext && authenticatedUser.app_metadata?.provider === "google") {
+        sessionStorage.removeItem("mediaai.signup.google_pending");
+        trackEvent("sign_up_completed", { method: "google", next: pendingNext });
+        trackEvent("sign_up", { method: "google" });
+      }
+    } catch {
+      // Analytics should not affect authentication if session storage is unavailable.
+    }
+  };
+
   useEffect(() => {
     // CRITICAL: subscribe BEFORE getSession to avoid missing events
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
@@ -25,6 +41,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Sync to HubSpot on sign-in (idempotent, once per session)
       if (event === "SIGNED_IN" && newSession?.user?.email) {
         const u = newSession.user;
+        trackAuthenticatedSession(u, "auth_event");
         const syncKey = `hs_synced_${u.id}`;
         if (!sessionStorage.getItem(syncKey)) {
           sessionStorage.setItem(syncKey, "1");
@@ -47,6 +64,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     supabase.auth.getSession().then(({ data: { session: existing } }) => {
       setSession(existing);
       setUser(existing?.user ?? null);
+      if (existing?.user) trackAuthenticatedSession(existing.user, "restored_session");
       setLoading(false);
     });
 

@@ -52,3 +52,23 @@ export const addStructuredData = (data: object) => {
   script.textContent = JSON.stringify(data);
   document.head.appendChild(script);
 };
+
+/** Replaces page-specific JSON-LD instead of accumulating duplicate scripts during SPA navigation. */
+export const setStructuredData = (id: string, data: object) => {
+  document.getElementById(id)?.remove();
+  const script = document.createElement("script");
+  script.id = id;
+  script.type = "application/ld+json";
+  script.textContent = JSON.stringify(data);
+  document.head.appendChild(script);
+};
+
+export const setRobotsDirective = (content: "index,follow" | "noindex,follow") => {
+  let meta = document.querySelector('meta[name="robots"]');
+  if (!meta) {
+    meta = document.createElement("meta");
+    meta.setAttribute("name", "robots");
+    document.head.appendChild(meta);
+  }
+  meta.setAttribute("content", content);
+};

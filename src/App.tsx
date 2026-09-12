@@ -47,6 +47,8 @@ const RequestDemo = lazy(() => import("./pages/RequestDemo"));
 const SharedList = lazy(() => import("./pages/SharedList"));
 const Discover = lazy(() => import("./pages/Discover"));
 const DiscoverPage = lazy(() => import("./pages/DiscoverPage"));
+const JournalistBeatDirectory = lazy(() => import("./pages/JournalistBeatDirectory"));
+const JournalistBeatPage = lazy(() => import("./pages/JournalistBeatPage"));
 const AdminSeoPages = lazy(() => import("./pages/admin/SeoPages"));
 const CompareHub = lazy(() => import("./pages/compare/CompareHub"));
 const ComparePage = lazy(() => import("./pages/compare/ComparePage"));
@@ -65,7 +67,7 @@ const RESERVED_ROOT = new Set([
   "resources", "tools", "about", "blog", "privacy", "terms", "",
   "login", "signup", "forgot-password", "reset-password",
   "app", "dashboard", "database", "chat", "search", "monitor", "relevance", "profiles", "account", "team", "pricing", "billing", "request-demo", "shared",
-  "discover", "admin", "compare", "guides", "ai-info",
+  "discover", "journalists", "admin", "compare", "guides", "ai-info",
 ]);
 
 const LegacySlugRedirect = () => {
@@ -188,6 +190,8 @@ const App = () => (
               {/* Programmatic SEO discover pages */}
               <Route path="/discover" element={<Discover />} />
               <Route path="/discover/:slug" element={<DiscoverPage />} />
+              <Route path="/journalists" element={<JournalistBeatDirectory />} />
+              <Route path="/journalists/:beat" element={<JournalistBeatPage />} />
               <Route path="/admin/seo-pages" element={<AdminSeoPages />} />
 
               {/* Tools (canonical) */}

@@ -85,6 +85,9 @@ const quotaReachedMessage = [
   "[Buy a one-time credit top-up](/account#credits) to keep researching, or [start Starter](/pricing?upgrade=paid&feature=search_quota) for 200,000 monthly credits. Need the full database, Monitor, Inbox, or team workflows? [Choose Growth](/pricing?upgrade=growth&feature=search_quota).",
 ].join("\n\n");
 
+const PRE_LIMIT_TOPUP_DISMISS_PREFIX = "mediaai.monetization.pre_limit_topup.dismissed";
+const PRE_LIMIT_TOPUP_ATTRIBUTION_KEY = "mediaai.monetization.topup_offer";
+
 const JOURNALIST_COLS: { key: keyof Row | "authority"; label: string }[] = [
   { key: "name", label: "Name" },
   { key: "title", label: "Title" },
@@ -547,7 +550,7 @@ SidebarNavButton.displayName = "SidebarNavButton";
 const Chat = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  const { planIdentifier } = useSubscription();
+  const { planIdentifier, active: subscriptionActive } = useSubscription();
   const hasGrowth = isGrowthPlanIdentifier(planIdentifier);
   const { threadId } = useParams<{ threadId?: string }>();
   const initials = (user?.email ?? "?").slice(0, 2).toUpperCase();
@@ -561,6 +564,8 @@ const Chat = () => {
   const [savingIdx, setSavingIdx] = useState<Record<number, "saving" | "saved">>({});
   const [enrichingIdx, setEnrichingIdx] = useState<Record<number, boolean>>({});
   const [relevanceFeedback, setRelevanceFeedback] = useState<Record<string, "relevant" | "not_relevant">>({});
+  const [preLimitOfferDismissed, setPreLimitOfferDismissed] = useState(true);
+  const [topupStarting, setTopupStarting] = useState(false);
   const [openProfile, setOpenProfile] = useState<{ kind: "journalist" | "creator"; id: number; query?: string; matchScore?: number } | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
@@ -743,6 +748,48 @@ const Chat = () => {
   const renameSearch = useRenameSavedSearch();
 
   const { usage, applyServerUsage, refresh: refreshUsage } = useChatUsage();
+  const preLimitOfferStorageKey = `${PRE_LIMIT_TOPUP_DISMISS_PREFIX}.${user?.id ?? "anonymous"}.${usage?.period_ym || "current"}`;
+  const isPreLimitTopupEligible = Boolean(
+    user
+    && usage
+    && !subscriptionActive
+    && usage.allowance <= 5_000
+    && usage.credits <= 0
+    && usage.used >= usage.allowance * 0.8
+    && usage.remaining > 0,
+  );
+  const showPreLimitTopupOffer = isPreLimitTopupEligible && !preLimitOfferDismissed;
+
+  useEffect(() => {
+    try {
+      setPreLimitOfferDismissed(window.localStorage.getItem(preLimitOfferStorageKey) === "1");
+    } catch {
+      // Storage being unavailable should not hide a useful, eligible offer.
+      setPreLimitOfferDismissed(false);
+    }
+  }, [preLimitOfferStorageKey]);
+
+  useEffect(() => {
+    if (!isPreLimitTopupEligible || !usage) return;
+    trackOncePerSession("free_credit_topup_eligible", {
+      allowance: usage.allowance,
+      credits_used: usage.used,
+      credits_remaining: usage.remaining,
+      offer_pack: "small",
+      offer_value_usd: TOPUP_PACKS.small.priceUsd,
+    }, `free_credit_topup_eligible.${user?.id ?? "anonymous"}.${usage.period_ym}`);
+  }, [isPreLimitTopupEligible, usage, user?.id]);
+
+  useEffect(() => {
+    if (!showPreLimitTopupOffer || !usage) return;
+    trackOncePerSession("free_credit_topup_offer_shown", {
+      allowance: usage.allowance,
+      credits_used: usage.used,
+      credits_remaining: usage.remaining,
+      offer_pack: "small",
+      offer_value_usd: TOPUP_PACKS.small.priceUsd,
+    }, `free_credit_topup_offer_shown.${user?.id ?? "anonymous"}.${usage.period_ym}`);
+  }, [showPreLimitTopupOffer, usage, user?.id]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -772,6 +819,12 @@ const Chat = () => {
       (async () => {
         try {
           const result = await confirmTopup(sessionId);
+          let topupOfferAttribution: string | null = null;
+          try {
+            topupOfferAttribution = window.sessionStorage.getItem(PRE_LIMIT_TOPUP_ATTRIBUTION_KEY);
+          } catch {
+            // Attribution is best effort and must not affect purchase confirmation.
+          }
           if (result.ok && result.amountTotal > 0 && sessionId) {
             const paidValue = result.amountTotal / 100;
             trackEvent("purchase", {
@@ -785,6 +838,14 @@ const Chat = () => {
                 quantity: 1,
               }],
             });
+            if (topupOfferAttribution === "pre_limit_small") {
+              trackEvent("free_credit_topup_purchase_confirmed", {
+                transaction_id: sessionId,
+                pack: result.pack || "small",
+                value: paidValue,
+                currency: result.currency.toUpperCase(),
+              });
+            }
           }
           toast.success("Credits added to your account");
         } catch (e) {
@@ -795,10 +856,19 @@ const Chat = () => {
           url.searchParams.delete("topup");
           url.searchParams.delete("session_id");
           window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+          try { window.sessionStorage.removeItem(PRE_LIMIT_TOPUP_ATTRIBUTION_KEY); } catch { /* best effort */ }
         }
       })();
     } else if (topup === "cancelled") {
       trackEvent("topup_checkout_cancelled");
+      try {
+        if (window.sessionStorage.getItem(PRE_LIMIT_TOPUP_ATTRIBUTION_KEY) === "pre_limit_small") {
+          trackEvent("free_credit_topup_checkout_cancelled", { offer_pack: "small" });
+        }
+        window.sessionStorage.removeItem(PRE_LIMIT_TOPUP_ATTRIBUTION_KEY);
+      } catch {
+        // Analytics attribution is optional.
+      }
       toast.info("Top-up cancelled");
       url.searchParams.delete("topup");
       window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
@@ -983,6 +1053,38 @@ const Chat = () => {
     } catch (e) {
       toast.error((e as Error).message || "Top-up failed");
     }
+  };
+
+  const startPreLimitTopup = async () => {
+    if (!user || topupStarting) return;
+    setTopupStarting(true);
+    try {
+      try { window.sessionStorage.setItem(PRE_LIMIT_TOPUP_ATTRIBUTION_KEY, "pre_limit_small"); } catch { /* best effort */ }
+      trackEvent("free_credit_topup_offer_clicked", {
+        offer_pack: "small",
+        offer_value_usd: TOPUP_PACKS.small.priceUsd,
+        allowance: usage?.allowance ?? 5_000,
+        credits_used: usage?.used ?? 0,
+      });
+      trackEvent("free_credit_topup_checkout_started", {
+        offer_pack: "small",
+        value: TOPUP_PACKS.small.priceUsd,
+        currency: "USD",
+      });
+      await startTopup("small");
+    } catch (e) {
+      try { window.sessionStorage.removeItem(PRE_LIMIT_TOPUP_ATTRIBUTION_KEY); } catch { /* best effort */ }
+      trackEvent("free_credit_topup_checkout_failed", { offer_pack: "small" });
+      toast.error((e as Error).message || "Could not start top-up checkout");
+    } finally {
+      setTopupStarting(false);
+    }
+  };
+
+  const dismissPreLimitTopup = () => {
+    try { window.localStorage.setItem(preLimitOfferStorageKey, "1"); } catch { /* best effort */ }
+    setPreLimitOfferDismissed(true);
+    trackEvent("free_credit_topup_offer_dismissed", { offer_pack: "small" });
   };
 
   const handleSignOut = async () => { await signOut(); navigate("/"); };
@@ -1424,7 +1526,40 @@ const Chat = () => {
             )}
           </div>
 
-          <div className={`w-full ${results ? "" : "max-w-2xl"} px-4 pb-6`}>
+          {showPreLimitTopupOffer && usage && (
+            <aside className={`mx-4 mb-3 w-full rounded-xl border border-primary/20 bg-primary/5 p-3 ${results ? "" : "max-w-2xl"}`} aria-label="Search credit top-up offer">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                    <Zap className="h-4 w-4 text-primary" /> Keep researching without interruption
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    You have {usage.remaining.toLocaleString()} free credits left this month. Add 100k credits for $10 - they never expire.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={dismissPreLimitTopup}
+                  className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
+                  aria-label="Dismiss credit top-up offer"
+                >
+                  Not now
+                </button>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                className="mt-3 w-full"
+                onClick={() => void startPreLimitTopup()}
+                disabled={topupStarting}
+              >
+                {topupStarting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Zap className="mr-1.5 h-3.5 w-3.5" />}
+                Continue with 100k credits - $10
+              </Button>
+            </aside>
+          )}
+
+	          <div className={`w-full ${results ? "" : "max-w-2xl"} px-4 pb-6`}>
             <div
               data-tour="search-input"
               className="relative rounded-2xl border border-border bg-white shadow-sm focus-within:border-primary/60"

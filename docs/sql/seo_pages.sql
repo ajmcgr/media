@@ -32,10 +32,13 @@ drop policy if exists seo_pages_auth_read on public.seo_pages;
 create policy seo_pages_auth_read on public.seo_pages
   for select to authenticated using (true);
 
--- TODO: replace this with an admin role check when user_roles is added.
+-- Writes are admin-only (see docs/sql/admin_roles.sql for user_roles + has_role).
 drop policy if exists seo_pages_auth_write on public.seo_pages;
-create policy seo_pages_auth_write on public.seo_pages
-  for all to authenticated using (true) with check (true);
+drop policy if exists seo_pages_admin_write on public.seo_pages;
+create policy seo_pages_admin_write on public.seo_pages
+  for all to authenticated
+  using (public.has_role(auth.uid(), 'admin'))
+  with check (public.has_role(auth.uid(), 'admin'));
 
 create or replace function public.tg_seo_pages_touch()
 returns trigger language plpgsql as $$

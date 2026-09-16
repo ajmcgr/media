@@ -35,6 +35,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useUpsertSavedSearch } from "@/hooks/useSavedSearches";
 import AppHeader from "@/components/AppHeader";
 import AppSidebar from "@/components/AppSidebar";
+import { trackEvent } from "@/lib/analytics";
 
 type Tab = "journalists" | "creators";
 

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
+import { sanitizeEmailHtml } from "@/lib/sanitizeHtml";
 import { Inbox as InboxIcon, Mail, Send, Loader2, Plug, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -167,7 +168,7 @@ function ThreadView({ threadId, onBack, onReply }: {
                     <div>{new Date(m.date * 1000).toLocaleString()}</div>
                   </div>
                   <div className="text-xs text-muted-foreground mb-3">to {m.to.map((t) => t.email).join(", ")}</div>
-                  <div className="prose prose-sm max-w-none text-sm" dangerouslySetInnerHTML={{ __html: m.body }} />
+                  <div className="prose prose-sm max-w-none text-sm" dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(m.body) }} />
                 </div>
               ))}
             </div>

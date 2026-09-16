@@ -26,7 +26,7 @@ import { toCsv, downloadCsv } from "@/lib/csv";
 import { useChatUsage } from "@/hooks/useChatUsage";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { confirmTopup, startTopup, type TopupPack } from "@/lib/billing";
+import { confirmTopup, startTopup, TOPUP_PACKS, type TopupPack } from "@/lib/billing";
 import { useOutletAuthorities, resolveAuthority } from "@/hooks/useOutletAuthority";
 import { AuthorityBadge } from "@/components/dashboard/AuthorityBadge";
 import OnboardingChecklist, { markFirstSearchComplete } from "@/components/OnboardingChecklist";

@@ -67,7 +67,7 @@ export const useSavedWebListItems = (listId: string | undefined) =>
         .eq("list_id", listId!)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as SavedWebListItem[];
+      return (data ?? []) as unknown as SavedWebListItem[];
     },
   });
 

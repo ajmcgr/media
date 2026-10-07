@@ -116,7 +116,7 @@ const Footer = () => {
         </div>
       </div>
       <div className="mt-12 flex justify-center">
-        <a href="https://tryrocket.ai/apps/5adcfd38-1c73-400c-973b-083c9e58a3d1" target="_blank" rel="noopener">
+        <a href="https://tryrocket.ai/apps/media" target="_blank" rel="noopener">
           <img
             src="https://tryrocket.ai/badges/find-it-on-rocket-black.svg"
             alt="Discover it on Rocket"

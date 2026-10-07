@@ -864,6 +864,17 @@ const Index = () => {
             </div>
           </div>
         </div>
+        <div className="mt-12 flex justify-center">
+          <a href="https://tryrocket.ai/apps/5adcfd38-1c73-400c-973b-083c9e58a3d1" target="_blank" rel="noopener">
+            <img
+              src="https://tryrocket.ai/badges/find-it-on-rocket-black.svg"
+              alt="Discover it on Rocket"
+              width="220"
+              height="68"
+              className="block h-auto max-w-full"
+            />
+          </a>
+        </div>
         <p className="text-xs text-muted-foreground text-center mt-12">
                 Copyright © {new Date().getFullYear()} Works App, Inc. Built with 🫶🏻 by{" "}
                 <a href="http://x.com/alexmacgregor__/" target="_blank" rel="noopener noreferrer" className="hover:text-foreground">Alex</a>.
